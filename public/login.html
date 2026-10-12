@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inloggen · Bladwerk</title>
+  <link rel="icon" href="/img/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&family=Lora:wght@500;600&display=swap">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="login-pagina">
+  <main class="login-kaart">
+    <div class="merk merk-groot"><img src="/img/logo.svg" alt=""><span>Bladwerk</span></div>
+    <p class="login-uitleg">Het PDF-hulpmiddel van Hartspraak.</p>
+    <form method="post" action="/inloggen">
+      <label class="label" for="wachtwoord">Wachtwoord</label>
+      <input class="veld" type="password" id="wachtwoord" name="wachtwoord" autocomplete="current-password" required autofocus>
+      <p class="fouttekst" id="fout" hidden></p>
+      <button class="knop knop-primair knop-breed" type="submit">Inloggen</button>
+    </form>
+  </main>
+  <script>
+    const fout = new URLSearchParams(location.search).get('fout');
+    const p = document.getElementById('fout');
+    if (fout === 'wachtwoord') { p.textContent = 'Dat wachtwoord klopt niet.'; p.hidden = false; }
+    if (fout === 'wacht') { p.textContent = 'Te veel pogingen. Wacht een kwartier en probeer het dan opnieuw.'; p.hidden = false; }
+  </script>
+</body>
+</html>

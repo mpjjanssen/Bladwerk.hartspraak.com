@@ -1,0 +1,457 @@
+'use strict';
+
+/*
+ * Bladwerk — eigen PDF-hulpmiddel van Hartspraak.
+ *
+ * De server doet drie dingen:
+ *  1. Toegang afschermen met één wachtwoord (ondertekend sessiecookie).
+ *  2. De webpagina en de bibliotheken serveren.
+ *  3. Alleen voor omzetten, verkleinen, doorzoekbaar maken en ontgrendelen
+ *     een bestand verwerken. Elk bestand krijgt een eigen tijdelijke map
+ *     die direct na afloop wordt gewist, ook bij een fout.
+ */
+
+const express = require('express');
+const multer = require('multer');
+const crypto = require('crypto');
+const fs = require('fs');
+const fsp = require('fs/promises');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
+
+const PORT = process.env.PORT || 3000;
+const PASSWORD = process.env.BLADWERK_PASSWORD || '';
+const SECRET = process.env.SESSION_SECRET || '';
+const IS_PROD = process.env.NODE_ENV === 'production';
+const SESSION_DAYS = 30;
+const MAX_UPLOAD_MB = 300;
+const JOB_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_PARALLEL_JOBS = 2;
+
+if (!PASSWORD || !SECRET) {
+  console.error('BLADWERK_PASSWORD en SESSION_SECRET moeten ingesteld zijn.');
+  if (IS_PROD) process.exit(1);
+}
+
+const app = express();
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
+/* ---------- Beveiligingskoppen ---------- */
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (IS_PROD) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  next();
+});
+
+/* ---------- Sessie ---------- */
+function sign(value) {
+  return crypto.createHmac('sha256', SECRET).update(value).digest('base64url');
+}
+
+function makeSession() {
+  const expires = Date.now() + SESSION_DAYS * 24 * 3600 * 1000;
+  const nonce = crypto.randomBytes(8).toString('base64url');
+  const payload = `${expires}.${nonce}`;
+  return `${payload}.${sign(payload)}`;
+}
+
+function validSession(cookieValue) {
+  if (!cookieValue || !SECRET) return false;
+  const parts = cookieValue.split('.');
+  if (parts.length !== 3) return false;
+  const payload = `${parts[0]}.${parts[1]}`;
+  const expected = Buffer.from(sign(payload));
+  const given = Buffer.from(parts[2]);
+  if (expected.length !== given.length) return false;
+  if (!crypto.timingSafeEqual(expected, given)) return false;
+  return Number(parts[0]) > Date.now();
+}
+
+function readCookie(req, name) {
+  const header = req.headers.cookie || '';
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    if (part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return null;
+}
+
+function passwordMatches(given) {
+  const a = crypto.createHash('sha256').update(String(given || '')).digest();
+  const b = crypto.createHash('sha256').update(PASSWORD).digest();
+  return PASSWORD.length > 0 && crypto.timingSafeEqual(a, b);
+}
+
+/* Eenvoudige rem op raden: 8 pogingen per 15 minuten per adres. */
+const attempts = new Map();
+function tooManyAttempts(ip) {
+  const now = Date.now();
+  const list = (attempts.get(ip) || []).filter((t) => now - t < 15 * 60 * 1000);
+  attempts.set(ip, list);
+  return list.length >= 8;
+}
+function recordAttempt(ip) {
+  const list = attempts.get(ip) || [];
+  list.push(Date.now());
+  attempts.set(ip, list);
+}
+
+const PUBLIC_DIR = path.join(__dirname, 'public');
+
+app.get('/inloggen', (req, res) => {
+  if (validSession(readCookie(req, 'bw_sessie'))) return res.redirect('/');
+  res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
+});
+
+app.post('/inloggen', express.urlencoded({ extended: false, limit: '10kb' }), (req, res) => {
+  const ip = req.ip;
+  if (tooManyAttempts(ip)) return res.redirect('/inloggen?fout=wacht');
+  if (!passwordMatches(req.body && req.body.wachtwoord)) {
+    recordAttempt(ip);
+    return res.redirect('/inloggen?fout=wachtwoord');
+  }
+  attempts.delete(ip);
+  res.setHeader(
+    'Set-Cookie',
+    `bw_sessie=${encodeURIComponent(makeSession())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${IS_PROD ? '; Secure' : ''}`
+  );
+  res.redirect('/');
+});
+
+app.post('/uitloggen', (req, res) => {
+  res.setHeader('Set-Cookie', `bw_sessie=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${IS_PROD ? '; Secure' : ''}`);
+  res.redirect('/inloggen');
+});
+
+app.get('/gezond', (req, res) => res.type('text').send('ok'));
+
+/* Alles wat de inlogpagina nodig heeft, mag zonder sessie. */
+const OPEN_PATHS = ['/css/', '/img/', '/fonts-web/'];
+app.use((req, res, next) => {
+  if (OPEN_PATHS.some((p) => req.path.startsWith(p))) return next();
+  if (validSession(readCookie(req, 'bw_sessie'))) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ fout: 'Je bent niet (meer) ingelogd.' });
+  return res.redirect('/inloggen');
+});
+
+/* ---------- Statische bestanden ---------- */
+const nm = (p) => path.join(__dirname, 'node_modules', p);
+const vendorOpts = { maxAge: '30d', immutable: true };
+app.use('/vendor/pdfjs', express.static(nm('pdfjs-dist/build'), vendorOpts));
+app.use('/vendor/pdfjs/cmaps', express.static(nm('pdfjs-dist/cmaps'), vendorOpts));
+app.use('/vendor/pdfjs/standard_fonts', express.static(nm('pdfjs-dist/standard_fonts'), vendorOpts));
+app.use('/vendor/pdf-lib', express.static(nm('pdf-lib/dist'), vendorOpts));
+app.use('/vendor/fontkit', express.static(nm('@pdf-lib/fontkit/dist'), vendorOpts));
+app.use('/vendor/jszip', express.static(nm('jszip/dist'), vendorOpts));
+app.use(express.static(PUBLIC_DIR, { index: 'index.html', maxAge: 0 }));
+
+/* ---------- Verwerking op de server ---------- */
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024, files: 1 },
+});
+
+let running = 0;
+const waiting = [];
+function acquire() {
+  if (running < MAX_PARALLEL_JOBS) {
+    running++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => waiting.push(resolve)).then(() => { running++; });
+}
+function release() {
+  running--;
+  const next = waiting.shift();
+  if (next) next();
+}
+
+function run(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    let stdout = '';
+    child.stdout.on('data', (d) => { if (stdout.length < 20000) stdout += d; });
+    child.stderr.on('data', (d) => { if (stderr.length < 20000) stderr += d; });
+    const timer = setTimeout(() => { child.kill('SIGKILL'); }, opts.timeout || JOB_TIMEOUT_MS);
+    child.on('error', (err) => { clearTimeout(timer); reject(err); });
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      if (code === 0) resolve({ stdout, stderr });
+      else {
+        const err = new Error(`${cmd} stopte met code ${code}${signal ? ' (' + signal + ')' : ''}`);
+        err.stderr = stderr;
+        err.stdout = stdout;
+        err.code = code;
+        reject(err);
+      }
+    });
+  });
+}
+
+class UserError extends Error {}
+
+/*
+ * Voert een klus uit in een eigen tijdelijke map. De map wordt altijd
+ * gewist, of het nu lukt of niet.
+ */
+async function withJob(req, res, handler) {
+  if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
+    return res.status(400).json({ fout: 'Er is geen bestand meegestuurd.' });
+  }
+  await acquire();
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bladwerk-'));
+  try {
+    const result = await handler(dir, req.file.buffer);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', result.type);
+    if (result.headers) for (const [k, v] of Object.entries(result.headers)) res.setHeader(k, v);
+    res.send(result.data);
+  } catch (err) {
+    if (err instanceof UserError) {
+      res.status(422).json({ fout: err.message });
+    } else {
+      console.error('Klus mislukt:', err.message, (err.stderr || '').slice(0, 2000));
+      res.status(500).json({ fout: 'Het verwerken is mislukt. Probeer het nog eens, of met een ander bestand.' });
+    }
+  } finally {
+    release();
+    await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
+    if (req.file) req.file.buffer = null;
+  }
+}
+
+function isPdf(buf) {
+  return buf.length > 5 && buf.slice(0, 1024).includes(Buffer.from('%PDF-'));
+}
+
+
+/*
+ * Beveiligde PDF's: alleen-beperkingen (geen wachtwoord nodig om te openen)
+ * halen we stil weg; vraagt het bestand een wachtwoord, dan melden we dat.
+ */
+async function ontsleutelIndienNodig(dir, input) {
+  let versleuteld = false;
+  try { await run('qpdf', ['--is-encrypted', input], { timeout: 60000 }); versleuteld = true; } catch (_) { versleuteld = false; }
+  if (!versleuteld) return input;
+  let wachtwoordNodig = false;
+  try { await run('qpdf', ['--requires-password', input], { timeout: 60000 }); wachtwoordNodig = true; } catch (_) { wachtwoordNodig = false; }
+  if (wachtwoordNodig) {
+    throw new UserError('Deze PDF is beveiligd met een wachtwoord. Open hem eerst in de werkruimte om hem te ontgrendelen.');
+  }
+  const out = path.join(dir, 'ontsleuteld.pdf');
+  try {
+    await run('qpdf', ['--decrypt', input, out], { timeout: 2 * 60 * 1000 });
+  } catch (err) {
+    if (!(err.code === 3 && fs.existsSync(out))) throw err;
+  }
+  return out;
+}
+
+const singleFile = (req, res, next) =>
+  upload.single('bestand')(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ fout: `Het bestand is groter dan ${MAX_UPLOAD_MB} MB.` });
+    }
+    return res.status(400).json({ fout: 'Het bestand kon niet worden ontvangen.' });
+  });
+
+/* Word (en andere tekstbestanden) naar PDF via LibreOffice */
+const WORD_EXT = ['.doc', '.docx', '.odt', '.rtf', '.txt', '.pages'];
+app.post('/api/word-naar-pdf', singleFile, (req, res) =>
+  withJob(req, res, async (dir, buf) => {
+    let ext = path.extname(req.file.originalname || '').toLowerCase();
+    if (ext === '.pages') throw new UserError('Pages-bestanden kan ik niet omzetten. Exporteer het in Pages eerst als Word-bestand.');
+    if (!WORD_EXT.includes(ext)) ext = '.docx';
+    const input = path.join(dir, 'invoer' + ext);
+    await fsp.writeFile(input, buf);
+    const profile = path.join(dir, 'lo-profiel');
+    await run('soffice', [
+      `-env:UserInstallation=file://${profile}`,
+      '--headless', '--norestore', '--nologo',
+      '--convert-to', 'pdf:writer_pdf_Export',
+      '--outdir', dir, input,
+    ], { timeout: 5 * 60 * 1000, env: { ...process.env, HOME: dir } });
+    const out = path.join(dir, 'invoer.pdf');
+    if (!fs.existsSync(out)) throw new Error('LibreOffice maakte geen PDF');
+    return { type: 'application/pdf', data: await fsp.readFile(out) };
+  })
+);
+
+/* PDF naar Word via pdf2docx */
+app.post('/api/pdf-naar-word', singleFile, (req, res) =>
+  withJob(req, res, async (dir, buf) => {
+    if (!isPdf(buf)) throw new UserError('Dit is geen PDF-bestand.');
+    const input = path.join(dir, 'invoer.pdf');
+    const output = path.join(dir, 'uitvoer.docx');
+    await fsp.writeFile(input, buf);
+    const bron = await ontsleutelIndienNodig(dir, input);
+    try {
+      await run('python3', [path.join(__dirname, 'scripts', 'pdf_naar_word.py'), bron, output], {
+        timeout: 10 * 60 * 1000,
+      });
+    } catch (err) {
+      if ((err.stderr || '').includes('VERSLEUTELD')) {
+        throw new UserError('Deze PDF is beveiligd met een wachtwoord. Open hem eerst in de werkruimte om hem te ontgrendelen.');
+      }
+      throw err;
+    }
+    return {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      data: await fsp.readFile(output),
+    };
+  })
+);
+
+/* Verkleinen met Ghostscript, in drie standen */
+const STANDEN = {
+  email: { preset: '/ebook', dpi: 150 },
+  scherm: { preset: '/screen', dpi: 110 },
+  druk: { preset: '/printer', dpi: 300 },
+};
+app.post('/api/verkleinen', singleFile, (req, res) =>
+  withJob(req, res, async (dir, buf) => {
+    if (!isPdf(buf)) throw new UserError('Dit is geen PDF-bestand.');
+    const stand = STANDEN[req.query.stand] ? req.query.stand : 'email';
+    const { preset, dpi } = STANDEN[stand];
+    const input = path.join(dir, 'invoer.pdf');
+    const output = path.join(dir, 'uitvoer.pdf');
+    await fsp.writeFile(input, buf);
+    const bron = await ontsleutelIndienNodig(dir, input);
+    const args = [
+      '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.6', `-dPDFSETTINGS=${preset}`,
+      '-dNOPAUSE', '-dQUIET', '-dBATCH', '-dSAFER',
+      '-dDetectDuplicateImages=true', '-dCompressFonts=true', '-dSubsetFonts=true',
+      '-dAutoRotatePages=/None',
+      '-dDownsampleColorImages=true', '-dDownsampleGrayImages=true', '-dDownsampleMonoImages=true',
+      `-dColorImageResolution=${dpi}`, `-dGrayImageResolution=${dpi}`,
+      `-dMonoImageResolution=${Math.max(dpi * 2, 300)}`,
+      '-dColorImageDownsampleThreshold=1.2', '-dGrayImageDownsampleThreshold=1.2',
+    ];
+    if (stand !== 'druk') args.push('-sColorConversionStrategy=RGB');
+    args.push(`-sOutputFile=${output}`, bron);
+    try {
+      await run('gs', args, { timeout: 10 * 60 * 1000 });
+    } catch (err) {
+      if (/password/i.test(err.stderr || '') || /password/i.test(err.stdout || '')) {
+        throw new UserError('Deze PDF is beveiligd met een wachtwoord. Open hem eerst in de werkruimte om hem te ontgrendelen.');
+      }
+      throw err;
+    }
+    let data = await fsp.readFile(output);
+    let kept = false;
+    if (data.length >= buf.length) {
+      data = buf;
+      kept = true;
+    }
+    return {
+      type: 'application/pdf',
+      data,
+      headers: {
+        'X-Grootte-Voor': String(buf.length),
+        'X-Grootte-Na': String(data.length),
+        'X-Origineel-Behouden': kept ? '1' : '0',
+      },
+    };
+  })
+);
+
+/* Scan doorzoekbaar maken met ocrmypdf (Nederlands, Duits, Engels) */
+app.post('/api/doorzoekbaar', singleFile, (req, res) =>
+  withJob(req, res, async (dir, buf) => {
+    if (!isPdf(buf)) throw new UserError('Dit is geen PDF-bestand.');
+    const input = path.join(dir, 'invoer.pdf');
+    const output = path.join(dir, 'uitvoer.pdf');
+    await fsp.writeFile(input, buf);
+    const bron = await ontsleutelIndienNodig(dir, input);
+    try {
+      await run('ocrmypdf', [
+        '-l', 'nld+deu+eng',
+        '--skip-text', '--rotate-pages', '--deskew',
+        '--output-type', 'pdf', '--optimize', '1',
+        '--jobs', '2', '--quiet',
+        bron, output,
+      ], { timeout: 15 * 60 * 1000, env: { ...process.env, HOME: dir, TMPDIR: dir } });
+    } catch (err) {
+      const msg = (err.stderr || '') + (err.stdout || '');
+      if (err.code === 8 || /encrypted/i.test(msg)) {
+        throw new UserError('Deze PDF is beveiligd met een wachtwoord. Open hem eerst in de werkruimte om hem te ontgrendelen.');
+      }
+      if (err.code === 6) {
+        throw new UserError('Deze PDF heeft al doorzoekbare tekst.');
+      }
+      throw err;
+    }
+    return { type: 'application/pdf', data: await fsp.readFile(output) };
+  })
+);
+
+/* Beveiligde PDF ontgrendelen met qpdf (wachtwoord van de gebruiker) */
+app.post('/api/ontgrendelen', singleFile, (req, res) =>
+  withJob(req, res, async (dir, buf) => {
+    if (!isPdf(buf)) throw new UserError('Dit is geen PDF-bestand.');
+    const input = path.join(dir, 'invoer.pdf');
+    const output = path.join(dir, 'uitvoer.pdf');
+    await fsp.writeFile(input, buf);
+    const pw = String((req.body && req.body.wachtwoord) || '');
+    const pwFile = path.join(dir, 'pw.txt');
+    await fsp.writeFile(pwFile, pw, { mode: 0o600 });
+    try {
+      await run('qpdf', [`--password-file=${pwFile}`, '--decrypt', input, output], { timeout: 2 * 60 * 1000 });
+    } catch (err) {
+      // qpdf geeft code 3 bij waarschuwingen; het resultaat is dan toch bruikbaar.
+      if (err.code === 3 && fs.existsSync(output)) {
+        return { type: 'application/pdf', data: await fsp.readFile(output) };
+      }
+      if (/invalid password/i.test(err.stderr || '')) {
+        throw new UserError(pw ? 'Dat wachtwoord klopt niet.' : 'WACHTWOORD_NODIG');
+      }
+      throw err;
+    }
+    return { type: 'application/pdf', data: await fsp.readFile(output) };
+  })
+);
+
+/* Foto van iPhone (HEIC) omzetten naar JPG, zodat de browser hem kan lezen */
+app.post('/api/foto-naar-jpg', singleFile, (req, res) =>
+  withJob(req, res, async (dir, buf) => {
+    const input = path.join(dir, 'invoer.heic');
+    const output = path.join(dir, 'uitvoer.jpg');
+    await fsp.writeFile(input, buf);
+    await run('heif-convert', ['-q', '90', input, output], { timeout: 2 * 60 * 1000 });
+    let out = output;
+    if (!fs.existsSync(out)) {
+      // Bij bestanden met meerdere beelden nummert heif-convert de uitvoer.
+      const files = (await fsp.readdir(dir)).filter((f) => f.startsWith('uitvoer') && f.endsWith('.jpg')).sort();
+      if (!files.length) throw new Error('Geen JPG gemaakt');
+      out = path.join(dir, files[0]);
+    }
+    return { type: 'image/jpeg', data: await fsp.readFile(out) };
+  })
+);
+
+app.use('/api', (req, res) => res.status(404).json({ fout: 'Onbekende opdracht.' }));
+
+/* Opruimen van mappen die een eventuele crash hebben overleefd */
+async function cleanupStale() {
+  try {
+    const tmp = os.tmpdir();
+    for (const name of await fsp.readdir(tmp)) {
+      if (!name.startsWith('bladwerk-')) continue;
+      const p = path.join(tmp, name);
+      const st = await fsp.stat(p).catch(() => null);
+      if (st && Date.now() - st.mtimeMs > 30 * 60 * 1000) await fsp.rm(p, { recursive: true, force: true });
+    }
+  } catch (_) { /* niets */ }
+}
+cleanupStale();
+setInterval(cleanupStale, 15 * 60 * 1000).unref();
+
+app.listen(PORT, () => console.log(`Bladwerk draait op poort ${PORT}`));
