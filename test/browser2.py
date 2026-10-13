@@ -9,7 +9,7 @@ with sync_playwright() as p:
     pg=ctx.new_page()
     pg.on('console', lambda m: fouten.append(f'{m.type}: {m.text}') if m.type=='error' else None)
     pg.on('pageerror', lambda e: fouten.append(f'PAGEERROR: {e}'))
-    pg.goto('http://localhost:3100/'); pg.fill('#wachtwoord','test123'); pg.click('button[type=submit]'); pg.wait_for_selector('.sleepvak')
+    pg.goto('http://localhost:3100/'); pg.fill('#bw-wachtwoord','test123'); pg.click('.login-formulier button'); pg.wait_for_selector('.sleepvak')
     def klus(naam, bestanden):
         with pg.expect_file_chooser() as fc: pg.click(f'.klus:has-text("{naam}")')
         fc.value.set_files(bestanden)

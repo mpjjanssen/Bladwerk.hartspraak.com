@@ -1,4 +1,5 @@
 /* Kleine hulpmiddelen voor de bediening: meldingen, vensters, opslaan, server. */
+import { toonInlog } from './inloggen.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -191,7 +192,7 @@ export function vandaag() {
 }
 
 /* ---------- Server ---------- */
-export async function api(pad, bestand, naam, velden = {}) {
+export async function api(pad, bestand, naam, velden = {}, opnieuw = true) {
   const fd = new FormData();
   for (const [k, v] of Object.entries(velden)) fd.append(k, v);
   fd.append('bestand', bestand instanceof Blob ? bestand : new Blob([bestand]), naam || 'bestand');
@@ -201,9 +202,13 @@ export async function api(pad, bestand, naam, velden = {}) {
   } catch (_) {
     throw new Error('De server is niet bereikbaar. Controleer je internetverbinding.');
   }
-  if (res.status === 401) {
-    location.href = '/inloggen';
-    throw new Error('Je bent niet meer ingelogd.');
+  if (res.status === 401 && opnieuw) {
+    // Sessie verlopen: inloggen en de klus daarna gewoon afmaken.
+    const laag = document.querySelector('.bezig');
+    if (laag) laag.hidden = true;
+    await toonInlog();
+    if (laag) laag.hidden = false;
+    return api(pad, bestand, naam, velden, false);
   }
   if (!res.ok) {
     let fout = 'Er ging iets mis op de server.';

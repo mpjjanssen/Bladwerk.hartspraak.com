@@ -1,0 +1,25 @@
+{
+  "name": "Bladwerk",
+  "short_name": "Bladwerk",
+  "description": "Het PDF-hulpmiddel van Hartspraak",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f5f0",
+  "theme_color": "#2a7d7d",
+  "lang": "nl",
+  "icons": [
+    { "src": "/img/icoon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/img/icoon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/img/icoon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": { "application/pdf": [".pdf"] },
+      "icons": [{ "src": "/img/icoon-512.png", "sizes": "512x512", "type": "image/png" }]
+    }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" }
+}

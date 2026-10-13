@@ -17,7 +17,7 @@ with sync_playwright() as p:
     pg.on('console', lambda m: fouten.append(f'{m.type}: {m.text}') if m.type in ('error','warning') else None)
     pg.on('pageerror', lambda e: fouten.append(f'PAGEERROR: {e}'))
     pg.goto('http://localhost:3100/')
-    pg.fill('#wachtwoord', 'test123'); pg.click('button[type=submit]')
+    pg.fill('#bw-wachtwoord', 'test123'); pg.click('.login-formulier button')
     pg.wait_for_selector('.sleepvak')
     pg.screenshot(path=U+'s1-start.png')
     with pg.expect_file_chooser() as fc: pg.click('.sleepvak')

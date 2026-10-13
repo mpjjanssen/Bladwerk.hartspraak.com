@@ -104,40 +104,51 @@ function recordAttempt(ip) {
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-app.get('/inloggen', (req, res) => {
-  if (validSession(readCookie(req, 'bw_sessie'))) return res.redirect('/');
-  res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
-});
+/*
+ * De app zelf (pagina, scripts, opmaak) is openbaar; daar staat niets
+ * geheims in. Alleen de verwerking op de server (/api/) vraagt een sessie.
+ * Zo kan de geïnstalleerde app een aangeklikt bestand vasthouden terwijl
+ * je inlogt.
+ */
+const wilJson = (req) => (req.get('accept') || '').includes('application/json');
+
+app.get('/inloggen', (req, res) => res.redirect('/'));
 
 app.post('/inloggen', express.urlencoded({ extended: false, limit: '10kb' }), (req, res) => {
   const ip = req.ip;
-  if (tooManyAttempts(ip)) return res.redirect('/inloggen?fout=wacht');
+  if (tooManyAttempts(ip)) {
+    return wilJson(req)
+      ? res.status(429).json({ fout: 'Te veel pogingen. Wacht een kwartier en probeer het dan opnieuw.' })
+      : res.redirect('/?fout=wacht');
+  }
   if (!passwordMatches(req.body && req.body.wachtwoord)) {
     recordAttempt(ip);
-    return res.redirect('/inloggen?fout=wachtwoord');
+    return wilJson(req) ? res.status(401).json({ fout: 'Dat wachtwoord klopt niet.' }) : res.redirect('/?fout=wachtwoord');
   }
   attempts.delete(ip);
   res.setHeader(
     'Set-Cookie',
     `bw_sessie=${encodeURIComponent(makeSession())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${IS_PROD ? '; Secure' : ''}`
   );
-  res.redirect('/');
+  return wilJson(req) ? res.json({ ok: true }) : res.redirect('/');
 });
 
 app.post('/uitloggen', (req, res) => {
   res.setHeader('Set-Cookie', `bw_sessie=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${IS_PROD ? '; Secure' : ''}`);
-  res.redirect('/inloggen');
+  res.redirect('/');
 });
 
 app.get('/gezond', (req, res) => res.type('text').send('ok'));
 
-/* Alles wat de inlogpagina nodig heeft, mag zonder sessie. */
-const OPEN_PATHS = ['/css/', '/img/', '/fonts-web/'];
-app.use((req, res, next) => {
-  if (OPEN_PATHS.some((p) => req.path.startsWith(p))) return next();
+app.use('/api/', (req, res, next) => {
   if (validSession(readCookie(req, 'bw_sessie'))) return next();
-  if (req.path.startsWith('/api/')) return res.status(401).json({ fout: 'Je bent niet (meer) ingelogd.' });
-  return res.redirect('/inloggen');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(401).json({ fout: 'Je bent niet (meer) ingelogd.' });
+});
+
+app.get('/api/sessie', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ingelogd: true });
 });
 
 /* ---------- Statische bestanden ---------- */
@@ -149,7 +160,15 @@ app.use('/vendor/pdfjs/standard_fonts', express.static(nm('pdfjs-dist/standard_f
 app.use('/vendor/pdf-lib', express.static(nm('pdf-lib/dist'), vendorOpts));
 app.use('/vendor/fontkit', express.static(nm('@pdf-lib/fontkit/dist'), vendorOpts));
 app.use('/vendor/jszip', express.static(nm('jszip/dist'), vendorOpts));
-app.use(express.static(PUBLIC_DIR, { index: 'index.html', maxAge: 0 }));
+app.use(express.static(PUBLIC_DIR, {
+  index: 'index.html',
+  maxAge: 0,
+  setHeaders: (res, file) => {
+    if (file.endsWith('.webmanifest')) res.setHeader('Content-Type', 'application/manifest+json');
+    if (file.endsWith('sw.js')) res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
 /* ---------- Verwerking op de server ---------- */
 const upload = multer({

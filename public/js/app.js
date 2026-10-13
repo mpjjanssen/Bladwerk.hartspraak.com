@@ -1,13 +1,18 @@
-/* Startpagina en het openen van de werkruimte. */
-import { el, icoon, melding, kiesBestanden, bevestig } from './hulp.js';
+/* Startpagina, inloggen, installeren als app en het openen van de werkruimte. */
+import { el, icoon, melding, kiesBestanden, bevestig, dialoog } from './hulp.js';
 import { Werkruimte, bestandenUitSlepen } from './werkruimte.js';
 import * as concept from './concept.js';
 import * as klussen from './klussen.js';
 import { haalHandtekening } from './handtekening.js';
+import { zorgVoorSessie, toonInlog } from './inloggen.js';
 
 const start = document.getElementById('start');
 const werkEl = document.getElementById('werkruimte');
 let werkruimte = null;
+let installPrompt = null;
+let offline = false;
+
+const isApp = () => window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: window-controls-overlay)').matches;
 
 function nieuweWerkruimte() {
   werkruimte = new Werkruimte(werkEl, {
@@ -30,11 +35,75 @@ async function openBestanden(lijst) {
     werkruimte = null;
     toonStart();
   } else {
+    document.title = `${w.naam} – Bladwerk`;
     await concept.wisConcept();
     // Begin een nieuw concept met de zojuist geopende bronnen.
     for (const [id, b] of w.bronnen) await concept.bewaarBron(id, b);
     w.bewaarConceptStraks();
   }
+}
+
+/*
+ * Bestanden die via "Open met → Bladwerk" binnenkomen. Er gaat nooit
+ * ongemerkt werk verloren: bij niet-opgeslagen wijzigingen vragen we eerst.
+ */
+async function ontvangGeopendeBestanden(lijst) {
+  if (!lijst.length) return;
+  const namen = lijst.map((k) => `"${k.bestand.name}"`).join(', ');
+
+  if (werkruimte) {
+    if (werkruimte.gewijzigd) {
+      const keuze = await dialoog({
+        titel: 'Ander document openen',
+        inhoud: `Je opent ${namen}, maar in "${werkruimte.naam}" zijn nog niet-opgeslagen wijzigingen. Wat wil je doen?`,
+        knoppen: [
+          { label: 'Annuleren', waarde: null },
+          { label: 'Toevoegen aan dit document', waarde: 'toevoegen' },
+          { label: 'Sluiten zonder opslaan', waarde: 'vervangen', gevaar: true },
+        ],
+      });
+      if (!keuze) return;
+      if (keuze === 'toevoegen') { await werkruimte.laadBestanden(lijst); return; }
+    }
+    werkruimte.opruimen();
+    werkruimte = null;
+    await concept.wisConcept();
+    await openBestanden(lijst);
+    return;
+  }
+
+  const c = await concept.laadConcept();
+  if (c && c.gewijzigd) {
+    const ok = await bevestig('Ander document openen',
+      `Je hebt nog niet-opgeslagen werk in "${c.naam}". Als je ${namen} opent, gaat dat werk verloren.`,
+      'Toch openen', true);
+    if (!ok) return;
+  }
+  await openBestanden(lijst);
+}
+
+/* Moet meteen bij het laden worden gezet, anders mist de app het bestand. */
+const sessieKlaar = zorgVoorSessie().then((stand) => {
+  offline = stand === 'offline';
+  return stand;
+});
+if ('launchQueue' in window) {
+  window.launchQueue.setConsumer(async (params) => {
+    if (!params.files || !params.files.length) return;
+    try {
+      const lijst = [];
+      for (const h of params.files) {
+        if (h.kind === 'file') lijst.push({ bestand: await h.getFile(), handle: h });
+      }
+      if (toonInlog.melding) toonInlog.melding(`Na het inloggen opent Bladwerk ${lijst.map((k) => `"${k.bestand.name}"`).join(', ')}.`);
+      await sessieKlaar;
+      await startKlaar;
+      await ontvangGeopendeBestanden(lijst);
+    } catch (err) {
+      console.error(err);
+      melding('Het bestand kon niet worden geopend.', 'fout');
+    }
+  });
 }
 
 const KLUSSEN = [
@@ -49,7 +118,26 @@ const KLUSSEN = [
   { id: 'handtekening', titel: 'Handtekening instellen', uitleg: '', icoon: 'handtekening', doe: async () => { await klussen.handtekeningInstellen(); toonStart(); } },
 ];
 
+function uitlegOpenMet() {
+  return dialoog({
+    titel: 'PDF\'s openen met Bladwerk',
+    inhoud: el('div', {},
+      el('p', {}, 'Klik in de Finder met de rechtermuisknop op een PDF en kies "Open met" → "Bladwerk". Het document opent dan direct in de werkruimte.'),
+      el('p', {}, 'Voorvertoning blijft gewoon de standaard als je dubbelklikt.'),
+      el('p', { class: 'klein' }, 'Staat Bladwerk niet in het lijstje? Kies dan "Andere…" en zoek Bladwerk in de map Programma\'s, onder "Chrome-apps".')),
+  });
+}
+
+async function installeer() {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  const { outcome } = await installPrompt.userChoice;
+  installPrompt = null;
+  if (outcome === 'accepted') toonStart();
+}
+
 async function toonStart() {
+  document.title = 'Bladwerk';
   werkEl.hidden = true;
   start.hidden = false;
   start.innerHTML = '';
@@ -69,11 +157,21 @@ async function toonStart() {
       el('span', { class: 'klus-tekst' }, el('strong', {}, k.titel), uitleg ? el('span', {}, uitleg) : null));
   };
 
+  const kopLinks = el('div', { class: 'kop-links' });
+  if (installPrompt && !isApp()) {
+    kopLinks.append(el('button', { type: 'button', class: 'knop knop-klein', onclick: installeer }, icoon('toevoegen', 16), el('span', {}, 'Als app installeren')));
+  }
+  if (isApp()) {
+    kopLinks.append(el('button', { type: 'button', class: 'linkknop', onclick: uitlegOpenMet }, 'PDF\'s openen met Bladwerk'));
+  }
+  kopLinks.append(el('form', { method: 'post', action: '/uitloggen' }, el('button', { type: 'submit', class: 'linkknop' }, 'Uitloggen')));
+
   start.append(
     el('header', { class: 'start-kop' },
       el('div', { class: 'merk merk-groot' }, el('img', { src: '/img/logo.svg', alt: '' }), el('span', {}, 'Bladwerk')),
-      el('form', { method: 'post', action: '/uitloggen' }, el('button', { type: 'submit', class: 'linkknop' }, 'Uitloggen'))),
+      kopLinks),
     el('main', { class: 'start-inhoud' },
+      offline ? el('p', { class: 'offline-melding' }, 'Je bent offline. Bekijken, invullen en ondertekenen werken gewoon; omzetten, verkleinen en tekst herkennen niet.') : null,
       verder,
       sleepVak,
       el('h2', {}, 'Snelle klussen'),
@@ -93,7 +191,10 @@ async function toonStart() {
         el('button', { type: 'button', class: 'knop knop-primair', onclick: async () => {
           const w = nieuweWerkruimte();
           start.hidden = true;
-          try { await w.laadConcept(c); } catch (err) {
+          try {
+            await w.laadConcept(c);
+            document.title = `${w.naam} – Bladwerk`;
+          } catch (err) {
             melding('Het concept kon niet worden geopend.', 'fout');
             w.opruimen(); werkruimte = null; toonStart();
           }
@@ -121,6 +222,21 @@ document.addEventListener('drop', async (e) => {
   openBestanden(await bestandenUitSlepen(e.dataTransfer));
 });
 
+/* Installeren als app */
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  if (!werkruimte && !start.hidden) toonStart();
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  melding('Bladwerk is geïnstalleerd. Je vindt het in het Dock en in de map Programma\'s.', 'goed', 8000);
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('Service worker niet geregistreerd', err));
+}
+
 /* Lettertypen voor de voorvertoning van tekst vooraf laden, zodat maten kloppen. */
 if (document.fonts) {
   for (const f of ['Arimo', 'Tinos', 'Cousine']) {
@@ -134,4 +250,10 @@ window.addEventListener('unhandledrejection', (e) => {
   melding((e.reason && e.reason.message) || 'Er ging iets mis.', 'fout', 7000);
 });
 
-toonStart();
+/* Alleen bedoeld voor de automatische tests. */
+window.bladwerkOpen = ontvangGeopendeBestanden;
+
+const startKlaar = sessieKlaar.then(async () => {
+  // Was er al een bestand via "Open met" binnengekomen, dan komt de werkruimte direct.
+  await toonStart();
+});

@@ -89,7 +89,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--teal); width: 16px
 .merk-groot img { width: 44px; height: 44px; }
 
 /* ---------- Inloggen ---------- */
-.login-pagina { display: grid; place-items: center; padding: 24px; }
+.login-laag { position: fixed; inset: 0; z-index: 80; background: var(--creme); display: grid; place-items: center; padding: 24px; }
+.login-wacht { background: var(--teal-licht); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; color: var(--teal-donker); }
+.kop-links { display: flex; align-items: center; gap: 18px; }
+.kop-links form { margin: 0; }
+.offline-melding { background: #fff4d6; border: 1px solid #ecd9a0; border-radius: var(--radius); padding: 10px 14px; margin: 0 0 16px; font-size: 14px; }
 .login-kaart { width: 100%; max-width: 380px; background: var(--kaart); border: 1px solid var(--rand); border-radius: 16px; padding: 32px; box-shadow: var(--schaduw); }
 .login-uitleg { color: var(--tekst-zacht); margin: 6px 0 20px; }
 .login-kaart .knop { margin-top: 16px; }

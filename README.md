@@ -20,6 +20,12 @@ Op de eigen server (bestand wordt direct na verwerking gewist):
 - beveiligde PDF's ontgrendelen met je eigen wachtwoord (qpdf)
 - iPhone-foto's (HEIC) omzetten
 
+## Als app op de Mac
+
+Bladwerk is installeerbaar vanuit Chrome (knop "Als app installeren" op de startpagina).
+Daarna opent rechtsklik op een PDF → "Open met" → "Bladwerk" het document direct in de werkruimte.
+De app-onderdelen worden bewaard (service worker), zodat bekijken, invullen en ondertekenen ook offline werken.
+
 ## Instellingen op Railway
 
 | Variabele | Betekenis |
@@ -36,4 +42,4 @@ npm install
 BLADWERK_PASSWORD=test SESSION_SECRET=iets-langs node server.js
 ```
 
-Tests: `node test/maak-voorbeelden.mjs && node test/test-bouwen.mjs`.
+Tests: `node test/maak-voorbeelden.mjs && node test/test-bouwen.mjs`, daarna de browsertests in `test/` (server op poort 3100, wachtwoord test123).
