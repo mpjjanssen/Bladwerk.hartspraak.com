@@ -1,4 +1,5 @@
 /* Startpagina, inloggen, installeren als app en het openen van de werkruimte. */
+import { t, locale, taal, zetTaal, TALEN } from './i18n.js';
 import { el, icoon, melding, kiesBestanden, bevestig, dialoog } from './hulp.js';
 import { Werkruimte, bestandenUitSlepen } from './werkruimte.js';
 import * as concept from './concept.js';
@@ -54,12 +55,12 @@ async function ontvangGeopendeBestanden(lijst) {
   if (werkruimte) {
     if (werkruimte.gewijzigd) {
       const keuze = await dialoog({
-        titel: 'Ander document openen',
-        inhoud: `Je opent ${namen}, maar in "${werkruimte.naam}" zijn nog niet-opgeslagen wijzigingen. Wat wil je doen?`,
+        titel: t('Ander document openen'),
+        inhoud: t('Je opent {namen}, maar in "{naam}" zijn nog niet-opgeslagen wijzigingen. Wat wil je doen?', { namen, naam: werkruimte.naam }),
         knoppen: [
-          { label: 'Annuleren', waarde: null },
-          { label: 'Toevoegen aan dit document', waarde: 'toevoegen' },
-          { label: 'Sluiten zonder opslaan', waarde: 'vervangen', gevaar: true },
+          { label: t('Annuleren'), waarde: null },
+          { label: t('Toevoegen aan dit document'), waarde: 'toevoegen' },
+          { label: t('Sluiten zonder opslaan'), waarde: 'vervangen', gevaar: true },
         ],
       });
       if (!keuze) return;
@@ -74,9 +75,9 @@ async function ontvangGeopendeBestanden(lijst) {
 
   const c = await concept.laadConcept();
   if (c && c.gewijzigd) {
-    const ok = await bevestig('Ander document openen',
-      `Je hebt nog niet-opgeslagen werk in "${c.naam}". Als je ${namen} opent, gaat dat werk verloren.`,
-      'Toch openen', true);
+    const ok = await bevestig(t('Ander document openen'),
+      t('Je hebt nog niet-opgeslagen werk in "{naam}". Als je {namen} opent, gaat dat werk verloren.', { naam: c.naam, namen }),
+      t('Toch openen'), true);
     if (!ok) return;
   }
   await openBestanden(lijst);
@@ -95,36 +96,36 @@ if ('launchQueue' in window) {
       for (const h of params.files) {
         if (h.kind === 'file') lijst.push({ bestand: await h.getFile(), handle: h });
       }
-      if (toonInlog.melding) toonInlog.melding(`Na het inloggen opent Bladwerk ${lijst.map((k) => `"${k.bestand.name}"`).join(', ')}.`);
+      if (toonInlog.melding) toonInlog.melding(t('Na het inloggen opent Bladwerk {namen}.', { namen: lijst.map((k) => `"${k.bestand.name}"`).join(', ') }));
       await sessieKlaar;
       await startKlaar;
       await ontvangGeopendeBestanden(lijst);
     } catch (err) {
       console.error(err);
-      melding('Het bestand kon niet worden geopend.', 'fout');
+      melding(t('Het bestand kon niet worden geopend.'), 'fout');
     }
   });
 }
 
 const KLUSSEN = [
-  { id: 'samenvoegen', titel: 'Samenvoegen', uitleg: 'Meerdere PDF\'s tot één bestand', icoon: 'samenvoegen', doe: () => klussen.samenvoegen({ openInWerkruimte: openBestanden }) },
-  { id: 'splitsen', titel: 'Splitsen', uitleg: 'Een PDF in delen opsplitsen', icoon: 'splitsen', doe: klussen.splitsen },
-  { id: 'word-pdf', titel: 'Word naar PDF', uitleg: 'Ook .doc, .odt en .rtf', icoon: 'pdf', doe: klussen.wordNaarPdf },
-  { id: 'pdf-word', titel: 'PDF naar Word', uitleg: 'Om een PDF verder te bewerken', icoon: 'word', doe: klussen.pdfNaarWord },
-  { id: 'fotos', titel: 'Foto\'s naar PDF', uitleg: 'Ook iPhone-foto\'s (HEIC)', icoon: 'foto', doe: () => klussen.fotosNaarPdf({ openInWerkruimte: openBestanden }) },
-  { id: 'plaatjes', titel: 'PDF naar afbeeldingen', uitleg: 'Elke pagina als PNG of JPG', icoon: 'afbeeldingen', doe: klussen.pdfNaarPlaatjes },
-  { id: 'ocr', titel: 'Doorzoekbaar maken', uitleg: 'Tekst in scans herkennen', icoon: 'zoeken', doe: klussen.doorzoekbaar },
-  { id: 'verkleinen', titel: 'Verkleinen', uitleg: 'Voor e-mail, scherm of drukwerk', icoon: 'verkleinen', doe: klussen.verkleinen },
-  { id: 'handtekening', titel: 'Handtekening instellen', uitleg: '', icoon: 'handtekening', doe: async () => { await klussen.handtekeningInstellen(); toonStart(); } },
+  { id: 'samenvoegen', titel: t('Samenvoegen'), uitleg: t('Meerdere PDF\'s tot één bestand'), icoon: 'samenvoegen', doe: () => klussen.samenvoegen({ openInWerkruimte: openBestanden }) },
+  { id: 'splitsen', titel: t('Splitsen'), uitleg: t('Een PDF in delen opsplitsen'), icoon: 'splitsen', doe: klussen.splitsen },
+  { id: 'word-pdf', titel: t('Word naar PDF'), uitleg: t('Ook .doc, .odt en .rtf'), icoon: 'pdf', doe: klussen.wordNaarPdf },
+  { id: 'pdf-word', titel: t('PDF naar Word'), uitleg: t('Om een PDF verder te bewerken'), icoon: 'word', doe: klussen.pdfNaarWord },
+  { id: 'fotos', titel: t('Foto\'s naar PDF'), uitleg: t('Ook iPhone-foto\'s (HEIC)'), icoon: 'foto', doe: () => klussen.fotosNaarPdf({ openInWerkruimte: openBestanden }) },
+  { id: 'plaatjes', titel: t('PDF naar afbeeldingen'), uitleg: t('Elke pagina als PNG of JPG'), icoon: 'afbeeldingen', doe: klussen.pdfNaarPlaatjes },
+  { id: 'ocr', titel: t('Doorzoekbaar maken'), uitleg: t('Tekst in scans herkennen'), icoon: 'zoeken', doe: klussen.doorzoekbaar },
+  { id: 'verkleinen', titel: t('Verkleinen'), uitleg: t('Voor e-mail, scherm of drukwerk'), icoon: 'verkleinen', doe: klussen.verkleinen },
+  { id: 'handtekening', titel: t('Handtekening instellen'), uitleg: '', icoon: 'handtekening', doe: async () => { await klussen.handtekeningInstellen(); toonStart(); } },
 ];
 
 function uitlegOpenMet() {
   return dialoog({
-    titel: 'PDF\'s openen met Bladwerk',
+    titel: t('PDF\'s openen met Bladwerk'),
     inhoud: el('div', {},
-      el('p', {}, 'Klik in de Finder met de rechtermuisknop op een PDF en kies "Open met" → "Bladwerk". Het document opent dan direct in de werkruimte.'),
-      el('p', {}, 'Voorvertoning blijft gewoon de standaard als je dubbelklikt.'),
-      el('p', { class: 'klein' }, 'Staat Bladwerk niet in het lijstje? Kies dan "Andere…" en zoek Bladwerk in de map Programma\'s, onder "Chrome-apps".')),
+      el('p', {}, t('Klik in de Finder met de rechtermuisknop op een PDF en kies "Open met" → "Bladwerk". Het document opent dan direct in de werkruimte.')),
+      el('p', {}, t('Voorvertoning blijft gewoon de standaard als je dubbelklikt.')),
+      el('p', { class: 'klein' }, t('Staat Bladwerk niet in het lijstje? Kies dan "Andere…" en zoek Bladwerk in de map Programma\'s, onder "Chrome-apps".'))),
   });
 }
 
@@ -144,14 +145,14 @@ async function toonStart() {
 
   const sleepVak = el('button', { type: 'button', class: 'sleepvak' },
     icoon('open', 40),
-    el('strong', {}, 'PDF openen'),
-    el('span', {}, 'Sleep een of meer PDF\'s of foto\'s hierheen, of klik om te kiezen'));
+    el('strong', {}, t('PDF openen')),
+    el('span', {}, t('Sleep een of meer PDF\'s of foto\'s hierheen, of klik om te kiezen')));
   sleepVak.addEventListener('click', async () => openBestanden(await kiesBestanden({ meerdere: true, soort: 'pdfOfFoto' })));
 
   const verder = el('div', { class: 'verder', hidden: true });
   const kaart = (k) => {
     let uitleg = k.uitleg;
-    if (k.id === 'handtekening') uitleg = haalHandtekening() ? 'Ingesteld · wijzigen' : 'Nog niet ingesteld';
+    if (k.id === 'handtekening') uitleg = haalHandtekening() ? t('Ingesteld · wijzigen') : t('Nog niet ingesteld');
     return el('button', { type: 'button', class: 'klus', onclick: () => k.doe().catch((e) => melding(e.message, 'fout')) },
       el('span', { class: 'klus-icoon' }, icoon(k.icoon, 24)),
       el('span', { class: 'klus-tekst' }, el('strong', {}, k.titel), uitleg ? el('span', {}, uitleg) : null));
@@ -159,34 +160,38 @@ async function toonStart() {
 
   const kopLinks = el('div', { class: 'kop-links' });
   if (installPrompt && !isApp()) {
-    kopLinks.append(el('button', { type: 'button', class: 'knop knop-klein', onclick: installeer }, icoon('toevoegen', 16), el('span', {}, 'Als app installeren')));
+    kopLinks.append(el('button', { type: 'button', class: 'knop knop-klein', onclick: installeer }, icoon('toevoegen', 16), el('span', {}, t('Als app installeren'))));
   }
   if (isApp()) {
-    kopLinks.append(el('button', { type: 'button', class: 'linkknop', onclick: uitlegOpenMet }, 'PDF\'s openen met Bladwerk'));
+    kopLinks.append(el('button', { type: 'button', class: 'linkknop', onclick: uitlegOpenMet }, t('PDF\'s openen met Bladwerk')));
   }
-  kopLinks.append(el('form', { method: 'post', action: '/uitloggen' }, el('button', { type: 'submit', class: 'linkknop' }, 'Uitloggen')));
+  const taalKeuze = el('select', { class: 'veld taalkeuze', 'aria-label': t('Taal'), title: t('Taal') },
+    Object.entries(TALEN).map(([code, naam]) => el('option', { value: code, selected: code === taal() || null }, naam)));
+  taalKeuze.addEventListener('change', () => zetTaal(taalKeuze.value));
+  kopLinks.append(taalKeuze);
+  kopLinks.append(el('form', { method: 'post', action: '/uitloggen' }, el('button', { type: 'submit', class: 'linkknop' }, t('Uitloggen'))));
 
   start.append(
     el('header', { class: 'start-kop' },
       el('div', { class: 'merk merk-groot' }, el('img', { src: '/img/logo.svg', alt: '' }), el('span', {}, 'Bladwerk')),
       kopLinks),
     el('main', { class: 'start-inhoud' },
-      offline ? el('p', { class: 'offline-melding' }, 'Je bent offline. Bekijken, invullen en ondertekenen werken gewoon; omzetten, verkleinen en tekst herkennen niet.') : null,
+      offline ? el('p', { class: 'offline-melding' }, t('Je bent offline. Bekijken, invullen en ondertekenen werken gewoon; omzetten, verkleinen en tekst herkennen niet.')) : null,
       verder,
       sleepVak,
-      el('h2', {}, 'Snelle klussen'),
+      el('h2', {}, t('Snelle klussen')),
       el('div', { class: 'klussen' }, KLUSSEN.map(kaart)),
       el('p', { class: 'klein start-voet' },
-        'Pagina\'s beheren, invullen, ondertekenen en aantekeningen gebeuren helemaal op je eigen computer. Alleen bij omzetten, verkleinen en tekst herkennen gaat een bestand even naar je eigen server, en daar wordt het direct gewist.')));
+        t('Pagina\'s beheren, invullen, ondertekenen en aantekeningen gebeuren helemaal op je eigen computer. Alleen bij omzetten, verkleinen en tekst herkennen gaat een bestand even naar je eigen server, en daar wordt het direct gewist.'))));
 
   const c = await concept.laadConcept();
   if (c) {
     verder.hidden = false;
-    const tijd = new Date(c.tijd).toLocaleString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    const tijd = new Date(c.tijd).toLocaleString(locale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     verder.append(
       el('div', {},
-        el('strong', {}, 'Verder waar je was'),
-        el('span', {}, `${c.naam} · ${c.aantal || c.staat.paginas.length} pagina's · ${tijd}${c.gewijzigd ? ' · niet opgeslagen wijzigingen' : ''}`)),
+        el('strong', {}, t('Verder waar je was')),
+        el('span', {}, `${c.naam} · ${t('{n} pagina\'s', { n: c.aantal || c.staat.paginas.length })} · ${tijd}${c.gewijzigd ? ` · ${t('niet opgeslagen wijzigingen')}` : ''}`)),
       el('div', { class: 'rij' },
         el('button', { type: 'button', class: 'knop knop-primair', onclick: async () => {
           const w = nieuweWerkruimte();
@@ -195,15 +200,15 @@ async function toonStart() {
             await w.laadConcept(c);
             document.title = `${w.naam} – Bladwerk`;
           } catch (err) {
-            melding('Het concept kon niet worden geopend.', 'fout');
+            melding(t('Het concept kon niet worden geopend.'), 'fout');
             w.opruimen(); werkruimte = null; toonStart();
           }
-        } }, 'Verder werken'),
+        } }, t('Verder werken')),
         el('button', { type: 'button', class: 'knop', onclick: async () => {
-          if (c.gewijzigd && !(await bevestig('Concept weggooien', 'Je wijzigingen in dit document zijn nog niet opgeslagen. Weggooien?', 'Weggooien', true))) return;
+          if (c.gewijzigd && !(await bevestig(t('Concept weggooien'), t('Je wijzigingen in dit document zijn nog niet opgeslagen. Weggooien?'), t('Weggooien'), true))) return;
           await concept.wisConcept();
           verder.remove();
-        } }, 'Weggooien')));
+        } }, t('Weggooien'))));
   }
 }
 
@@ -230,7 +235,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 window.addEventListener('appinstalled', () => {
   installPrompt = null;
-  melding('Bladwerk is geïnstalleerd. Je vindt het in het Dock en in de map Programma\'s.', 'goed', 8000);
+  melding(t('Bladwerk is geïnstalleerd. Je vindt het in het Dock en in de map Programma\'s.'), 'goed', 8000);
 });
 
 if ('serviceWorker' in navigator) {
@@ -247,7 +252,7 @@ if (document.fonts) {
 
 window.addEventListener('unhandledrejection', (e) => {
   console.error(e.reason);
-  melding((e.reason && e.reason.message) || 'Er ging iets mis.', 'fout', 7000);
+  melding((e.reason && e.reason.message) || t('Er ging iets mis.'), 'fout', 7000);
 });
 
 /* Alleen bedoeld voor de automatische tests. */

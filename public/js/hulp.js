@@ -1,4 +1,5 @@
 /* Kleine hulpmiddelen voor de bediening: meldingen, vensters, opslaan, server. */
+import { t, locale, taal } from './i18n.js';
 import { toonInlog } from './inloggen.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -109,7 +110,7 @@ export function bezig(tekst) {
 }
 
 /* ---------- Vensters ---------- */
-export function dialoog({ titel, inhoud, knoppen = [{ label: 'Oké', waarde: true, primair: true }], breed = false, bijOpenen }) {
+export function dialoog({ titel, inhoud, knoppen = [{ label: t('Oké'), waarde: true, primair: true }], breed = false, bijOpenen }) {
   return new Promise((resolve) => {
     const vorige = document.activeElement;
     const sluit = (waarde) => {
@@ -148,29 +149,29 @@ export function dialoog({ titel, inhoud, knoppen = [{ label: 'Oké', waarde: tru
   });
 }
 
-export async function bevestig(titel, tekst, jaLabel = 'Doorgaan', gevaar = false) {
+export async function bevestig(titel, tekst, jaLabel = t('Doorgaan'), gevaar = false) {
   return dialoog({
     titel,
     inhoud: tekst,
     knoppen: [
-      { label: 'Annuleren', waarde: false },
+      { label: t('Annuleren'), waarde: false },
       { label: jaLabel, waarde: true, primair: !gevaar, gevaar },
     ],
   });
 }
 
 export async function vraagWachtwoord(naam, fout) {
-  const invoer = el('input', { type: 'password', class: 'veld', autocomplete: 'off', placeholder: 'Wachtwoord' });
+  const invoer = el('input', { type: 'password', class: 'veld', autocomplete: 'off', placeholder: t('Wachtwoord') });
   return dialoog({
-    titel: 'Beveiligde PDF',
+    titel: t('Beveiligde PDF'),
     inhoud: el('div', {},
-      el('p', {}, `"${naam}" is beveiligd met een wachtwoord. Vul het wachtwoord in om hem te openen.`),
+      el('p', {}, t('"{naam}" is beveiligd met een wachtwoord. Vul het wachtwoord in om hem te openen.', { naam })),
       fout ? el('p', { class: 'fouttekst' }, fout) : null,
       invoer,
-      el('p', { class: 'klein' }, 'Om hem te ontgrendelen gaat het bestand even naar je eigen server en wordt daar direct gewist.')),
+      el('p', { class: 'klein' }, t('Om hem te ontgrendelen gaat het bestand even naar je eigen server en wordt daar direct gewist.'))),
     knoppen: [
-      { label: 'Annuleren', waarde: null },
-      { label: 'Openen', primair: true, waarde: () => invoer.value },
+      { label: t('Annuleren'), waarde: null },
+      { label: t('Openen'), primair: true, waarde: () => invoer.value },
     ],
   });
 }
@@ -179,7 +180,7 @@ export async function vraagWachtwoord(naam, fout) {
 export function grootte(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
-  return `${(bytes / 1024 / 1024).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} MB`;
+  return `${(bytes / 1024 / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 })} MB`;
 }
 
 export function basisNaam(naam) {
@@ -188,7 +189,8 @@ export function basisNaam(naam) {
 
 export function vandaag() {
   const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+  const scheiding = { nl: '-', de: '.', en: '/' }[taal()] || '-';
+  return [String(d.getDate()).padStart(2, '0'), String(d.getMonth() + 1).padStart(2, '0'), d.getFullYear()].join(scheiding);
 }
 
 /* ---------- Server ---------- */
@@ -198,9 +200,9 @@ export async function api(pad, bestand, naam, velden = {}, opnieuw = true) {
   fd.append('bestand', bestand instanceof Blob ? bestand : new Blob([bestand]), naam || 'bestand');
   let res;
   try {
-    res = await fetch(pad, { method: 'POST', body: fd, credentials: 'same-origin' });
+    res = await fetch(pad, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Taal': taal() } });
   } catch (_) {
-    throw new Error('De server is niet bereikbaar. Controleer je internetverbinding.');
+    throw new Error(t('De server is niet bereikbaar. Controleer je internetverbinding.'));
   }
   if (res.status === 401 && opnieuw) {
     // Sessie verlopen: inloggen en de klus daarna gewoon afmaken.
@@ -211,7 +213,7 @@ export async function api(pad, bestand, naam, velden = {}, opnieuw = true) {
     return api(pad, bestand, naam, velden, false);
   }
   if (!res.ok) {
-    let fout = 'Er ging iets mis op de server.';
+    let fout = t('Er ging iets mis op de server.');
     try { fout = (await res.json()).fout || fout; } catch (_) { /* geen json */ }
     const err = new Error(fout);
     err.status = res.status;
@@ -222,9 +224,9 @@ export async function api(pad, bestand, naam, velden = {}, opnieuw = true) {
 
 /* ---------- Bestanden kiezen ---------- */
 const SOORTEN = {
-  pdf: { omschrijving: 'PDF-bestanden', accept: { 'application/pdf': ['.pdf'] }, input: '.pdf,application/pdf' },
+  pdf: { omschrijving: t('PDF-bestanden'), accept: { 'application/pdf': ['.pdf'] }, input: '.pdf,application/pdf' },
   word: {
-    omschrijving: 'Word-bestanden',
+    omschrijving: t('Word-bestanden'),
     accept: {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
       'application/msword': ['.doc'],
@@ -235,12 +237,12 @@ const SOORTEN = {
     input: '.doc,.docx,.odt,.rtf,.txt',
   },
   foto: {
-    omschrijving: 'Foto\'s',
+    omschrijving: t('Foto\'s'),
     accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp', '.gif', '.tif', '.tiff'] },
     input: 'image/*,.heic,.heif',
   },
   pdfOfFoto: {
-    omschrijving: 'PDF\'s en foto\'s',
+    omschrijving: t('PDF\'s en foto\'s'),
     accept: { 'application/pdf': ['.pdf'], 'image/*': ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'] },
     input: '.pdf,application/pdf,image/*,.heic,.heif',
   },
@@ -325,10 +327,10 @@ export async function bewaar(data, naam, { naast = null } = {}) {
 
 /* Overschrijft een bestand dat je eerder hebt geopend (alleen Chrome). */
 export async function overschrijf(handle, data) {
-  if (!handle || !handle.createWritable) throw new Error('Overschrijven kan alleen in Chrome, met een bestand dat je via Bladwerk hebt geopend.');
+  if (!handle || !handle.createWritable) throw new Error(t('Overschrijven kan alleen in Chrome, met een bestand dat je via Bladwerk hebt geopend.'));
   if (handle.queryPermission && (await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') {
     const ok = await handle.requestPermission({ mode: 'readwrite' });
-    if (ok !== 'granted') throw new Error('Je gaf geen toestemming om het origineel te overschrijven.');
+    if (ok !== 'granted') throw new Error(t('Je gaf geen toestemming om het origineel te overschrijven.'));
   }
   const w = await handle.createWritable();
   await w.write(data instanceof Blob ? data : new Blob([data]));
@@ -357,7 +359,7 @@ export async function bewaarMeerdere(bestanden, zipNaam, { naast = null } = {}) 
         await w.write(b.data instanceof Blob ? b.data : new Blob([b.data]));
         await w.close();
       }
-      return `${bestanden.length} bestanden in map "${map.name}"`;
+      return t('{n} bestanden in map "{map}"', { n: bestanden.length, map: map.name });
     } catch (e) {
       if (e.name === 'AbortError') return null;
       console.warn('Map kiezen lukte niet, ik maak een zip.', e);

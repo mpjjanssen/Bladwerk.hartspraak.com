@@ -1,4 +1,5 @@
 /* Laden van PDF's en foto's: bibliotheken, ontgrendelen, foto's omzetten. */
+import { t } from './i18n.js';
 import * as pdfjsLib from '/vendor/pdfjs/pdf.min.mjs';
 import * as PDFLib from '/vendor/pdf-lib/pdf-lib.esm.min.js';
 import { api, vraagWachtwoord, leesAlsBytes } from './hulp.js';
@@ -20,7 +21,12 @@ export async function laadUnicodeLetter() {
   return unicodeLetter;
 }
 
-export const BOUW_OPTIES = { fontkit, laadUnicodeLetter, auteur: 'Martien' };
+export const BOUW_OPTIES = {
+  fontkit,
+  laadUnicodeLetter,
+  /* Naam bij opmerkingen in de PDF: wie er is ingelogd. */
+  get auteur() { return (typeof window !== 'undefined' && window.bladwerkGebruiker) || 'Bladwerk'; },
+};
 
 export function openPdfjs(bytes) {
   return pdfjsLib.getDocument({
@@ -45,14 +51,14 @@ function isPdf(bytes) {
  * Geeft { bytes, xfa, velden } terug, of null als je annuleert.
  */
 export async function maakBewerkbaar(bytes, naam) {
-  if (!isPdf(bytes)) throw new Error(`"${naam}" is geen PDF-bestand.`);
+  if (!isPdf(bytes)) throw new Error(t('"{naam}" is geen PDF-bestand.', { naam }));
   let doc;
   try {
     doc = await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
   } catch (err) {
     const versleuteld = err && (err.name === 'EncryptedPDFError' || /encrypt/i.test(err.message || ''));
     if (!versleuteld) {
-      throw new Error(`"${naam}" kan ik niet lezen. Het bestand is mogelijk beschadigd.`);
+      throw new Error(t('"{naam}" kan ik niet lezen. Het bestand is mogelijk beschadigd.', { naam }));
     }
     bytes = await ontgrendel(bytes, naam);
     if (!bytes) return null;
@@ -81,7 +87,7 @@ async function ontgrendel(bytes, naam) {
     }
     wachtwoord = await vraagWachtwoord(naam, fout);
     if (wachtwoord == null) return null;
-    if (!wachtwoord) fout = 'Vul een wachtwoord in.';
+    if (!wachtwoord) fout = t('Vul een wachtwoord in.');
   }
 }
 
@@ -99,7 +105,7 @@ export async function leesFoto(bestand) {
   try {
     beeld = await createImageBitmap(blob, { imageOrientation: 'from-image' });
   } catch (_) {
-    throw new Error(`"${bestand.name}" kan ik niet als foto lezen.`);
+    throw new Error(t('"{naam}" kan ik niet als foto lezen.', { naam: bestand.name }));
   }
   const maxZijde = 4000;
   const schaal = Math.min(1, maxZijde / Math.max(beeld.width, beeld.height));

@@ -30,16 +30,21 @@ De app-onderdelen worden bewaard (service worker), zodat bekijken, invullen en o
 
 | Variabele | Betekenis |
 |---|---|
-| `BLADWERK_PASSWORD` | het wachtwoord om in te loggen |
+| `BLADWERK_GEBRUIKERS` | `Naam=wachtwoord;Naam=wachtwoord;…` — één wachtwoord per persoon; weghalen of wijzigen logt die persoon direct uit |
 | `SESSION_SECRET` | lange willekeurige tekst; wijzigen logt iedereen uit |
 
 Railway bouwt met de `Dockerfile`. Gezondheidscontrole: `/gezond`.
+
+## Talen
+
+Nederlands, Engels en Duits. Bladwerk kiest de taal van de computer; op de startpagina is hij om te zetten.
+Teksten staan in `public/js/vertalingen.js` (sleutel = de Nederlandse tekst).
 
 ## Lokaal draaien
 
 ```
 npm install
-BLADWERK_PASSWORD=test SESSION_SECRET=iets-langs node server.js
+BLADWERK_GEBRUIKERS='Martien=test' SESSION_SECRET=iets-langs node server.js
 ```
 
 Tests: `node test/maak-voorbeelden.mjs && node test/test-bouwen.mjs`, daarna de browsertests in `test/` (server op poort 3100, wachtwoord test123).

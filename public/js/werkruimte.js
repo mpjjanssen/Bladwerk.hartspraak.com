@@ -3,6 +3,7 @@
  * ondertekent en aantekeningen maakt. Alles gebeurt in de browser;
  * pas bij opslaan wordt er een nieuwe PDF gebouwd.
  */
+import { t, taal } from './i18n.js';
 import { pdfjsLib, PDFLib, openPdfjs, maakBewerkbaar, BOUW_OPTIES, fotosAlsPdf, isFoto } from './pdfbron.js';
 import { bouwPdf, LETTERS, REGELHOOGTE, schermMaat, laagVolgorde } from './bouwen.js';
 import {
@@ -16,22 +17,22 @@ let teller = 0;
 const nieuwId = (p) => `${p}${Date.now().toString(36)}${(teller++).toString(36)}`;
 const PX_PER_PT = 96 / 72;
 
-const STEMPELS = ['Goedgekeurd', 'Ontvangen', 'Gezien', 'Afgehandeld', 'Betaald', 'Vertrouwelijk', 'Concept', 'Kopie'];
-const TEKSTKLEUREN = [['#000000', 'Zwart'], ['#1d3f8f', 'Blauw'], ['#b3261e', 'Rood'], ['#2a7d7d', 'Teal']];
-const MARKEERKLEUREN = [['#ffe14d', 'Geel'], ['#9be38a', 'Groen'], ['#ff9ec7', 'Roze'], ['#8fd3ff', 'Blauw']];
-const STEMPELKLEUREN = [['#b3261e', 'Rood'], ['#1d3f8f', 'Blauw'], ['#2f7d32', 'Groen']];
+const STEMPELS = [t('Goedgekeurd'), t('Ontvangen'), t('Gezien'), t('Afgehandeld'), t('Betaald'), t('Vertrouwelijk'), t('Concept'), t('Kopie')];
+const TEKSTKLEUREN = [['#000000', t('Zwart')], ['#1d3f8f', t('Blauw')], ['#b3261e', t('Rood')], ['#2a7d7d', t('Teal')]];
+const MARKEERKLEUREN = [['#ffe14d', t('Geel')], ['#9be38a', t('Groen')], ['#ff9ec7', t('Roze')], ['#8fd3ff', t('Blauw')]];
+const STEMPELKLEUREN = [['#b3261e', t('Rood')], ['#1d3f8f', t('Blauw')], ['#2f7d32', t('Groen')]];
 
 const HINTS = {
   kiezen: '',
-  tekst: 'Klik op de pagina waar de tekst moet komen. Esc om te stoppen.',
-  handtekening: 'Klik op de plek waar je handtekening moet komen.',
-  vinkje: 'Klik waar het vinkje moet komen. Esc om te stoppen.',
-  kruisje: 'Klik waar het kruisje moet komen. Esc om te stoppen.',
-  datum: 'Klik waar de datum van vandaag moet komen.',
-  markeren: 'Trek met de muis een vak over de tekst die je wilt markeren.',
-  opmerking: 'Klik waar de opmerking moet komen.',
-  stempel: 'Kies rechts een stempel en klik op de pagina.',
-  corrigeren: 'Wijs een woord of regel aan en klik erop om hem te verbeteren.',
+  tekst: t('Klik op de pagina waar de tekst moet komen. Esc om te stoppen.'),
+  handtekening: t('Klik op de plek waar je handtekening moet komen.'),
+  vinkje: t('Klik waar het vinkje moet komen. Esc om te stoppen.'),
+  kruisje: t('Klik waar het kruisje moet komen. Esc om te stoppen.'),
+  datum: t('Klik waar de datum van vandaag moet komen.'),
+  markeren: t('Trek met de muis een vak over de tekst die je wilt markeren.'),
+  opmerking: t('Klik waar de opmerking moet komen.'),
+  stempel: t('Kies rechts een stempel en klik op de pagina.'),
+  corrigeren: t('Wijs een woord of regel aan en klik erop om hem te verbeteren.'),
 };
 
 export class Werkruimte {
@@ -53,7 +54,7 @@ export class Werkruimte {
     this.naam = 'document';
     this.gewijzigd = false;
     this.tekstStijl = { letter: 'helv', grootte: 11, kleur: '#000000', vet: false };
-    this.stempel = { tekst: 'Goedgekeurd', datum: true, kleur: '#b3261e' };
+    this.stempel = { tekst: t('Goedgekeurd'), datum: true, kleur: '#b3261e' };
     this.markeerKleur = '#ffe14d';
     this.tekstCache = new Map();
     this.veldCache = new Map();
@@ -65,8 +66,8 @@ export class Werkruimte {
   /* ================= Opzet van het scherm ================= */
   bouwOpzet() {
     this.root.innerHTML = '';
-    this.knopTerug = knop('', { icoon: 'terug', titel: 'Ongedaan maken (⌘Z)', klik: () => this.ongedaan(), class: 'knop-icoon' });
-    this.knopVooruit = knop('', { icoon: 'vooruit', titel: 'Opnieuw (⇧⌘Z)', klik: () => this.opnieuw(), class: 'knop-icoon' });
+    this.knopTerug = knop('', { icoon: 'terug', titel: t('Ongedaan maken (⌘Z)'), klik: () => this.ongedaan(), class: 'knop-icoon' });
+    this.knopVooruit = knop('', { icoon: 'vooruit', titel: t('Opnieuw (⇧⌘Z)'), klik: () => this.opnieuw(), class: 'knop-icoon' });
     this.zoomLabel = el('span', { class: 'zoom-label' }, '100%');
     this.docNaamEl = el('div', { class: 'docnaam' });
     this.paginaTeller = el('div', { class: 'paginateller' });
@@ -76,21 +77,21 @@ export class Werkruimte {
       this.docNaamEl,
       el('div', { class: 'balk-groep' }, this.knopTerug, this.knopVooruit),
       el('div', { class: 'balk-groep zoom' },
-        knop('', { icoon: 'min', titel: 'Kleiner', klik: () => this.zoomen(1 / 1.15), class: 'knop-icoon' }),
+        knop('', { icoon: 'min', titel: t('Kleiner'), klik: () => this.zoomen(1 / 1.15), class: 'knop-icoon' }),
         this.zoomLabel,
-        knop('', { icoon: 'plus', titel: 'Groter', klik: () => this.zoomen(1.15), class: 'knop-icoon' }),
-        knop('Paginabreedte', { klik: () => this.passend(), class: 'knop-klein' })),
+        knop('', { icoon: 'plus', titel: t('Groter'), klik: () => this.zoomen(1.15), class: 'knop-icoon' }),
+        knop(t('Paginabreedte'), { klik: () => this.passend(), class: 'knop-klein' })),
       this.paginaTeller,
       el('div', { class: 'balk-rechts' },
-        knop('Opslaan', { icoon: 'opslaan', soort: 'primair', klik: () => this.opslaan() }),
-        knop('Sluiten', { icoon: 'sluiten', klik: () => this.sluiten() })));
+        knop(t('Opslaan'), { icoon: 'opslaan', soort: 'primair', klik: () => this.opslaan() }),
+        knop(t('Sluiten'), { icoon: 'sluiten', klik: () => this.sluiten() })));
 
     this.miniLijst = el('div', { class: 'mini-lijst', tabindex: '-1' });
-    const links = el('aside', { class: 'zijbalk-links', 'aria-label': 'Pagina\'s' },
-      el('div', { class: 'zijbalk-kop' }, 'Pagina\'s'),
+    const links = el('aside', { class: 'zijbalk-links', 'aria-label': t('Pagina\'s') },
+      el('div', { class: 'zijbalk-kop' }, t('Pagina\'s')),
       this.miniLijst,
       el('div', { class: 'mini-voet' },
-        knop('Pagina\'s toevoegen', { icoon: 'toevoegen', klik: () => this.paginasToevoegen(), class: 'knop-klein knop-breed' })));
+        knop(t('Pagina\'s toevoegen'), { icoon: 'toevoegen', klik: () => this.paginasToevoegen(), class: 'knop-klein knop-breed' })));
 
     this.paginasEl = el('div', { class: 'paginas' });
     this.hintEl = el('div', { class: 'hint', hidden: true });
@@ -99,7 +100,7 @@ export class Werkruimte {
 
     this.gereedschapEl = el('div', { class: 'gereedschap' });
     this.eigenschapEl = el('div', { class: 'eigenschappen', hidden: true });
-    const rechts = el('aside', { class: 'zijbalk-rechts', 'aria-label': 'Gereedschap' },
+    const rechts = el('aside', { class: 'zijbalk-rechts', 'aria-label': t('Gereedschap') },
       this.gereedschapEl, this.eigenschapEl, this.paginaGereedschap());
 
     this.root.append(balk, el('div', { class: 'werk' }, links, midden, rechts));
@@ -126,46 +127,46 @@ export class Werkruimte {
 
   bouwGereedschap() {
     const h = haalHandtekening();
-    const handtekeningKnop = this.gereedschapKnop('handtekening', h ? 'Handtekening' : 'Handtekening (instellen)', 'handtekening');
+    const handtekeningKnop = this.gereedschapKnop('handtekening', h ? t('Handtekening') : t('Handtekening (instellen)'), 'handtekening');
     if (h) handtekeningKnop.append(el('img', { class: 'mini-handtekening', src: h.bron, alt: '' }));
     this.gereedschapEl.innerHTML = '';
     this.gereedschapEl.append(
       el('div', { class: 'groep' },
-        this.gereedschapKnop('kiezen', 'Selecteren', 'kiezen')),
+        this.gereedschapKnop('kiezen', t('Selecteren'), 'kiezen')),
       el('div', { class: 'groep' },
-        el('h3', {}, 'Ondertekenen en invullen'),
+        el('h3', {}, t('Ondertekenen en invullen')),
         handtekeningKnop,
-        this.gereedschapKnop('tekst', 'Tekst', 'tekst'),
+        this.gereedschapKnop('tekst', t('Tekst'), 'tekst'),
         el('div', { class: 'rij' },
-          this.gereedschapKnop('vinkje', 'Vinkje', 'vinkje'),
-          this.gereedschapKnop('kruisje', 'Kruisje', 'kruisje')),
-        this.gereedschapKnop('datum', 'Datum van vandaag', 'datum'),
-        el('button', { type: 'button', class: 'linkknop', onclick: async () => { await stelHandtekeningIn(); this.bouwGereedschap(); } }, 'Handtekening instellen')),
+          this.gereedschapKnop('vinkje', t('Vinkje'), 'vinkje'),
+          this.gereedschapKnop('kruisje', t('Kruisje'), 'kruisje')),
+        this.gereedschapKnop('datum', t('Datum van vandaag'), 'datum'),
+        el('button', { type: 'button', class: 'linkknop', onclick: async () => { await stelHandtekeningIn(); this.bouwGereedschap(); } }, t('Handtekening instellen'))),
       el('div', { class: 'groep' },
-        el('h3', {}, 'Aantekeningen'),
-        this.gereedschapKnop('markeren', 'Markeren', 'markeren'),
-        this.gereedschapKnop('opmerking', 'Opmerking', 'opmerking'),
-        this.gereedschapKnop('stempel', 'Stempel', 'stempel')),
+        el('h3', {}, t('Aantekeningen')),
+        this.gereedschapKnop('markeren', t('Markeren'), 'markeren'),
+        this.gereedschapKnop('opmerking', t('Opmerking'), 'opmerking'),
+        this.gereedschapKnop('stempel', t('Stempel'), 'stempel')),
       el('div', { class: 'groep' },
-        el('h3', {}, 'Corrigeren'),
-        this.gereedschapKnop('corrigeren', 'Tekst corrigeren', 'corrigeren')),
+        el('h3', {}, t('Corrigeren')),
+        this.gereedschapKnop('corrigeren', t('Tekst corrigeren'), 'corrigeren')),
       this.stempelPaneel = el('div', { class: 'groep stempelkeuze', hidden: true }));
     this.werkGereedschapBij();
   }
 
   paginaGereedschap() {
     return el('div', { class: 'groep paginagroep' },
-      el('h3', {}, 'Pagina\'s'),
+      el('h3', {}, t('Pagina\'s')),
       el('div', { class: 'rij' },
-        knop('Linksom', { icoon: 'links', klik: () => this.draaiPaginas(-90), titel: 'Draai de gekozen pagina\'s linksom' }),
-        knop('Rechtsom', { icoon: 'rechts', klik: () => this.draaiPaginas(90), titel: 'Draai de gekozen pagina\'s rechtsom' })),
-      knop('Verwijderen', { icoon: 'weg', klik: () => this.verwijderPaginas() }),
-      knop('Uitnemen als nieuwe PDF', { icoon: 'uitnemen', klik: () => this.uitnemen() }),
-      el('h3', {}, 'Meer'),
-      knop('Doorzoekbaar maken', { icoon: 'zoeken', klik: () => this.doorzoekbaarMaken(), titel: 'Tekst in gescande pagina\'s herkennen' }),
-      knop('Opslaan als Word', { icoon: 'word', klik: () => this.alsWord() }),
-      knop('Pagina\'s als afbeelding', { icoon: 'afbeeldingen', klik: () => this.alsAfbeeldingen() }),
-      el('p', { class: 'klein uitleg' }, 'Tip: kies pagina\'s links met ⌘-klik of ⇧-klik om er meerdere tegelijk te draaien, verwijderen of uit te nemen.'));
+        knop(t('Linksom'), { icoon: 'links', klik: () => this.draaiPaginas(-90), titel: t('Draai de gekozen pagina\'s linksom') }),
+        knop(t('Rechtsom'), { icoon: 'rechts', klik: () => this.draaiPaginas(90), titel: t('Draai de gekozen pagina\'s rechtsom') })),
+      knop(t('Verwijderen'), { icoon: 'weg', klik: () => this.verwijderPaginas() }),
+      knop(t('Uitnemen als nieuwe PDF'), { icoon: 'uitnemen', klik: () => this.uitnemen() }),
+      el('h3', {}, t('Meer')),
+      knop(t('Doorzoekbaar maken'), { icoon: 'zoeken', klik: () => this.doorzoekbaarMaken(), titel: t('Tekst in gescande pagina\'s herkennen') }),
+      knop(t('Opslaan als Word'), { icoon: 'word', klik: () => this.alsWord() }),
+      knop(t('Pagina\'s als afbeelding'), { icoon: 'afbeeldingen', klik: () => this.alsAfbeeldingen() }),
+      el('p', { class: 'klein uitleg' }, t('Tip: kies pagina\'s links met ⌘-klik of ⇧-klik om er meerdere tegelijk te draaien, verwijderen of uit te nemen.')));
   }
 
   werkGereedschapBij() {
@@ -187,9 +188,9 @@ export class Werkruimte {
     datum.addEventListener('change', () => { this.stempel.datum = datum.checked; });
     this.stempelPaneel.innerHTML = '';
     this.stempelPaneel.append(
-      el('h3', {}, 'Welke stempel'),
+      el('h3', {}, t('Welke stempel')),
       keuze,
-      el('label', { class: 'vinklabel' }, datum, 'Met datum van vandaag'),
+      el('label', { class: 'vinklabel' }, datum, t('Met datum van vandaag')),
       this.kleurKeuze(STEMPELKLEUREN, this.stempel.kleur, (k) => { this.stempel.kleur = k; }));
   }
 
@@ -228,13 +229,13 @@ export class Werkruimte {
 
   /* Opent bestanden (PDF's en/of foto's). Bij invoegen: na positie `na`. */
   async laadBestanden(lijst, { invoegenNa = null } = {}) {
-    const b = bezig('Bestand openen…');
+    const b = bezig(t('Bestand openen…'));
     const nieuwePaginas = [];
     try {
       const fotos = lijst.filter((k) => isFoto(k.bestand));
       const pdfs = lijst.filter((k) => !isFoto(k.bestand));
       for (const k of pdfs) {
-        b.tekst(`"${k.bestand.name}" openen…`);
+        b.tekst(t('"{naam}" openen…', { naam: k.bestand.name }));
         const bytes = await leesAlsBytes(k.bestand);
         const res = await maakBewerkbaar(bytes, k.bestand.name);
         if (!res) continue;
@@ -243,13 +244,13 @@ export class Werkruimte {
         for (let i = 0; i < bron.info.length; i++) nieuwePaginas.push({ id: nieuwId('p'), bron: bron.id, index: i, draai: 0 });
       }
       if (fotos.length) {
-        b.tekst('Foto\'s omzetten…');
+        b.tekst(t('Foto\'s omzetten…'));
         const bytes = await fotosAlsPdf(fotos.map((k) => k.bestand), {});
-        const bron = await this.voegBronToe(bytes, fotos.length === 1 ? fotos[0].bestand.name : 'Foto\'s', null);
+        const bron = await this.voegBronToe(bytes, fotos.length === 1 ? fotos[0].bestand.name : t('Foto\'s'), null);
         for (let i = 0; i < bron.info.length; i++) nieuwePaginas.push({ id: nieuwId('p'), bron: bron.id, index: i, draai: 0 });
       }
     } catch (err) {
-      melding(err.message || 'Openen mislukt.', 'fout', 7000);
+      melding(err.message || t('Openen mislukt.'), 'fout', 7000);
     } finally {
       b.klaar();
     }
@@ -266,7 +267,7 @@ export class Werkruimte {
       const pos = invoegenNa == null ? this.staat.paginas.length : invoegenNa + 1;
       this.staat.paginas.splice(pos, 0, ...nieuwePaginas);
       this.vastleggen();
-      melding(`${nieuwePaginas.length} pagina${nieuwePaginas.length === 1 ? '' : '\'s'} toegevoegd.`, 'goed');
+      melding((nieuwePaginas.length === 1 ? t('1 pagina toegevoegd.') : t('{n} pagina\'s toegevoegd.', { n: nieuwePaginas.length })), 'goed');
     }
     this.toon();
     if (eerste) this.passend();
@@ -276,17 +277,17 @@ export class Werkruimte {
 
   meldXfa(bron, velden) {
     if (velden > 0) {
-      melding(`"${bron.naam}" bevat ook het oude Adobe-formulierformaat (XFA). Bladwerk gebruikt de gewone invulvelden; controleer het resultaat even.`, 'info', 9000);
+      melding(t('"{naam}" bevat ook het oude Adobe-formulierformaat (XFA). Bladwerk gebruikt de gewone invulvelden; controleer het resultaat even.', { naam: bron.naam }), 'info', 9000);
     } else {
       dialoog({
-        titel: 'Dit formulier kan hier niet worden ingevuld',
-        inhoud: `"${bron.naam}" gebruikt het oude Adobe-formulierformaat (XFA). Dat werkt buiten Adobe Acrobat bijna nergens. Je kunt wel tekst, vinkjes en je handtekening op de pagina zetten, maar als de pagina leeg of met een melding verschijnt, vraag de instantie dan om een gewone PDF of vul het formulier in met Adobe Acrobat Reader.`,
+        titel: t('Dit formulier kan hier niet worden ingevuld'),
+        inhoud: t('"{naam}" gebruikt het oude Adobe-formulierformaat (XFA). Dat werkt buiten Adobe Acrobat bijna nergens. Je kunt wel tekst, vinkjes en je handtekening op de pagina zetten, maar als de pagina leeg of met een melding verschijnt, vraag de instantie dan om een gewone PDF of vul het formulier in met Adobe Acrobat Reader.', { naam: bron.naam }),
       });
     }
   }
 
   async laadConcept(c) {
-    const b = bezig('Verder waar je was…');
+    const b = bezig(t('Verder waar je was…'));
     try {
       for (const [id, rec] of Object.entries(c.bronnen)) {
         const pdf = await openPdfjs(rec.bytes);
@@ -461,7 +462,7 @@ export class Werkruimte {
     const pos = this.positie();
     const idx = pos ? this.staat.paginas.findIndex((p) => p.id === pos.pid) : 0;
     this.huidig = pos ? pos.pid : null;
-    this.paginaTeller.textContent = this.staat.paginas.length ? `Pagina ${idx + 1} van ${this.staat.paginas.length}` : '';
+    this.paginaTeller.textContent = this.staat.paginas.length ? t('Pagina {i} van {n}', { i: idx + 1, n: this.staat.paginas.length }) : '';
     for (const m of this.miniLijst.children) m.classList.toggle('huidig', m.dataset.id === this.huidig);
   }
 
@@ -651,7 +652,7 @@ export class Werkruimte {
       }
       case 'handtekening': {
         const bron = this.plaatjes.get(a.beeld);
-        if (bron) d.append(el('img', { src: bron, alt: 'Handtekening', draggable: 'false' }));
+        if (bron) d.append(el('img', { src: bron, alt: t('Handtekening'), draggable: 'false' }));
         break;
       }
       case 'markeren':
@@ -670,7 +671,7 @@ export class Werkruimte {
       }
       case 'opmerking':
         d.append(icoon('opmerking', Math.max(14, 18 * z)));
-        d.title = a.tekst || 'Opmerking';
+        d.title = a.tekst || t('Opmerking');
         break;
       default:
         break;
@@ -678,7 +679,7 @@ export class Werkruimte {
     if (this.gekozen && this.gekozen.aid === a.id) {
       d.classList.add('gekozen');
       if (['handtekening', 'markeren', 'stempel', 'vinkje', 'correctie'].includes(a.type)) {
-        const greep = el('div', { class: 'greep', title: 'Sleep om de grootte te wijzigen' });
+        const greep = el('div', { class: 'greep', title: t('Sleep om de grootte te wijzigen') });
         greep.addEventListener('pointerdown', (e) => this.begrijpGreep(e, p, a, d));
         d.append(greep);
       }
@@ -706,7 +707,7 @@ export class Werkruimte {
     try { inhoud.contentEditable = 'plaintext-only'; } catch (_) { inhoud.contentEditable = 'true'; }
     if (inhoud.contentEditable !== 'plaintext-only') inhoud.contentEditable = 'true';
     inhoud.spellcheck = true;
-    inhoud.setAttribute('lang', 'nl');
+    inhoud.setAttribute('lang', taal());
     inhoud.addEventListener('blur', () => this.stopBewerken());
     inhoud.addEventListener('keydown', (e) => {
       e.stopPropagation();
@@ -992,7 +993,7 @@ export class Werkruimte {
     const p = this.pagina(pid);
     const item = await this.zoekItem(p, x, y);
     if (!item) {
-      melding('Hier vind ik geen tekst om te verbeteren. Bij een scan maak je eerst de pagina doorzoekbaar (rechts onder "Meer"), of gebruik je het gereedschap Tekst.', 'info', 7000);
+      melding(t('Hier vind ik geen tekst om te verbeteren. Bij een scan maak je eerst de pagina doorzoekbaar (rechts onder "Meer"), of gebruik je het gereedschap Tekst.'), 'info', 7000);
       return;
     }
     const vak = { x: item.links - 1, y: item.boven - 1, w: item.breedte + 2, h: item.onder - item.boven + 2 };
@@ -1148,14 +1149,14 @@ export class Werkruimte {
     e.innerHTML = '';
     if (!a) { e.hidden = true; return; }
     e.hidden = false;
-    const namen = { tekst: 'Tekst', datum: 'Datum', correctie: 'Correctie', handtekening: 'Handtekening', markeren: 'Markering', vinkje: a.teken === 'x' ? 'Kruisje' : 'Vinkje', stempel: 'Stempel', opmerking: 'Opmerking' };
-    e.append(el('h3', {}, namen[a.type] || 'Gekozen'));
+    const namen = { tekst: t('Tekst'), datum: t('Datum'), correctie: t('Correctie'), handtekening: t('Handtekening'), markeren: t('Markering'), vinkje: a.teken === 'x' ? t('Kruisje') : t('Vinkje'), stempel: t('Stempel'), opmerking: t('Opmerking') };
+    e.append(el('h3', {}, namen[a.type] || t('Gekozen')));
 
     if (['tekst', 'datum', 'correctie'].includes(a.type)) {
       const letter = el('select', { class: 'veld' },
-        el('option', { value: 'helv', selected: a.letter === 'helv' || null }, 'Schreefloos'),
-        el('option', { value: 'times', selected: a.letter === 'times' || null }, 'Met schreef'),
-        el('option', { value: 'courier', selected: a.letter === 'courier' || null }, 'Typemachine'));
+        el('option', { value: 'helv', selected: a.letter === 'helv' || null }, t('Schreefloos')),
+        el('option', { value: 'times', selected: a.letter === 'times' || null }, t('Met schreef')),
+        el('option', { value: 'courier', selected: a.letter === 'courier' || null }, t('Typemachine')));
       letter.addEventListener('change', () => this.wijzig(a, (x) => { x.letter = letter.value; this.tekstStijl.letter = x.letter; }, { meten: true }));
       const maat = el('input', { type: 'number', class: 'veld veld-smal', min: 5, max: 96, step: 0.5, value: a.grootte });
       maat.addEventListener('change', () => {
@@ -1165,27 +1166,27 @@ export class Werkruimte {
       const vet = el('input', { type: 'checkbox', checked: a.vet || null });
       vet.addEventListener('change', () => this.wijzig(a, (x) => { x.vet = vet.checked; }, { meten: true }));
       e.append(
-        el('label', { class: 'label' }, 'Lettertype', letter),
-        el('div', { class: 'rij' }, el('label', { class: 'label' }, 'Grootte', maat), el('label', { class: 'vinklabel' }, vet, 'Vet')),
-        el('div', { class: 'label' }, 'Kleur'),
+        el('label', { class: 'label' }, t('Lettertype'), letter),
+        el('div', { class: 'rij' }, el('label', { class: 'label' }, t('Grootte'), maat), el('label', { class: 'vinklabel' }, vet, t('Vet'))),
+        el('div', { class: 'label' }, t('Kleur')),
         this.kleurKeuze(TEKSTKLEUREN, a.kleur, (k) => this.wijzig(a, (x) => { x.kleur = k; if (x.type !== 'correctie') this.tekstStijl.kleur = k; })));
       if (a.type === 'correctie') {
         const ag = el('input', { type: 'color', class: 'kleurveld', value: a.achtergrond || '#ffffff' });
         ag.addEventListener('change', () => this.wijzig(a, (x) => { x.achtergrond = ag.value; }));
-        e.append(el('label', { class: 'label' }, 'Achtergrondkleur', ag),
-          el('p', { class: 'klein' }, 'De oude tekst wordt afgedekt met deze kleur. Dubbelklik om de tekst te wijzigen.'));
+        e.append(el('label', { class: 'label' }, t('Achtergrondkleur'), ag),
+          el('p', { class: 'klein' }, t('De oude tekst wordt afgedekt met deze kleur. Dubbelklik om de tekst te wijzigen.')));
       } else {
-        e.append(el('p', { class: 'klein' }, 'Dubbelklik op de tekst om hem te wijzigen.'));
+        e.append(el('p', { class: 'klein' }, t('Dubbelklik op de tekst om hem te wijzigen.')));
       }
-      e.append(knop('Tekst wijzigen', { klik: () => this.bewerk(this.gekozen.pid, a.id) }));
+      e.append(knop(t('Tekst wijzigen'), { klik: () => this.bewerk(this.gekozen.pid, a.id) }));
     }
     if (a.type === 'markeren') {
       e.append(this.kleurKeuze(MARKEERKLEUREN, a.kleur, (k) => { this.markeerKleur = k; this.wijzig(a, (x) => { x.kleur = k; }); }));
     }
     if (a.type === 'vinkje') {
       const keuze = el('select', { class: 'veld' },
-        el('option', { value: 'v', selected: a.teken !== 'x' || null }, 'Vinkje ✔'),
-        el('option', { value: 'x', selected: a.teken === 'x' || null }, 'Kruisje ✘'));
+        el('option', { value: 'v', selected: a.teken !== 'x' || null }, t('Vinkje ✔')),
+        el('option', { value: 'x', selected: a.teken === 'x' || null }, t('Kruisje ✘')));
       keuze.addEventListener('change', () => this.wijzig(a, (x) => { x.teken = keuze.value; }));
       e.append(keuze, this.kleurKeuze(TEKSTKLEUREN, a.kleur, (k) => this.wijzig(a, (x) => { x.kleur = k; })));
     }
@@ -1194,20 +1195,20 @@ export class Werkruimte {
       keuze.addEventListener('change', () => this.wijzig(a, (x) => { x.tekst = keuze.value; }));
       const datum = el('input', { type: 'checkbox', checked: !!a.datum || null });
       datum.addEventListener('change', () => this.wijzig(a, (x) => { x.datum = datum.checked ? vandaag() : ''; }));
-      e.append(keuze, el('label', { class: 'vinklabel' }, datum, 'Met datum'),
+      e.append(keuze, el('label', { class: 'vinklabel' }, datum, t('Met datum')),
         this.kleurKeuze(STEMPELKLEUREN, a.kleur, (k) => this.wijzig(a, (x) => { x.kleur = k; })));
     }
     if (a.type === 'opmerking') {
-      const ta = el('textarea', { class: 'veld', rows: 5, placeholder: 'Schrijf hier je opmerking…' });
+      const ta = el('textarea', { class: 'veld', rows: 5, placeholder: t('Schrijf hier je opmerking…') });
       ta.value = a.tekst || '';
       ta.addEventListener('keydown', (ev) => ev.stopPropagation());
       ta.addEventListener('change', () => this.wijzig(a, (x) => { x.tekst = ta.value; }));
-      e.append(ta, el('p', { class: 'klein' }, 'De opmerking wordt een echte PDF-opmerking: in Acrobat en Voorvertoning zie je hem als notitie.'));
+      e.append(ta, el('p', { class: 'klein' }, t('De opmerking wordt een echte PDF-opmerking: in Acrobat en Voorvertoning zie je hem als notitie.')));
     }
     if (a.type === 'handtekening') {
-      e.append(el('p', { class: 'klein' }, 'Sleep om te verplaatsen; sleep het hoekje rechtsonder om de grootte te wijzigen.'));
+      e.append(el('p', { class: 'klein' }, t('Sleep om te verplaatsen; sleep het hoekje rechtsonder om de grootte te wijzigen.')));
     }
-    e.append(knop('Verwijderen', { icoon: 'weg', soort: 'gevaar', klik: () => this.verwijderGekozen() }));
+    e.append(knop(t('Verwijderen'), { icoon: 'weg', soort: 'gevaar', klik: () => this.verwijderGekozen() }));
   }
 
   /* ================= Miniaturen en paginabeheer ================= */
@@ -1225,16 +1226,16 @@ export class Werkruimte {
       const m = el('div', {
         class: `mini${this.paginaKeuze.has(p.id) ? ' gekozen' : ''}`,
         'data-id': p.id, draggable: 'true', tabindex: '0', role: 'button',
-        'aria-label': `Pagina ${i + 1}`,
+        'aria-label': t('Pagina {n}', { n: i + 1 }),
       },
       el('div', { class: 'mini-beeld' }, canvas,
-        (this.staat.aantekeningen[p.id] || []).length ? el('span', { class: 'mini-stip', title: 'Heeft aantekeningen' }) : null),
+        (this.staat.aantekeningen[p.id] || []).length ? el('span', { class: 'mini-stip', title: t('Heeft aantekeningen') }) : null),
       el('div', { class: 'mini-onder' },
         el('span', {}, String(i + 1)),
         el('span', { class: 'mini-acties' },
-          el('button', { type: 'button', title: 'Linksom draaien', onclick: (e) => { e.stopPropagation(); this.draaiPaginas(-90, [p.id]); } }, icoon('links', 14)),
-          el('button', { type: 'button', title: 'Rechtsom draaien', onclick: (e) => { e.stopPropagation(); this.draaiPaginas(90, [p.id]); } }, icoon('rechts', 14)),
-          el('button', { type: 'button', title: 'Verwijderen', onclick: (e) => { e.stopPropagation(); this.verwijderPaginas([p.id]); } }, icoon('weg', 14)))));
+          el('button', { type: 'button', title: t('Linksom draaien'), onclick: (e) => { e.stopPropagation(); this.draaiPaginas(-90, [p.id]); } }, icoon('links', 14)),
+          el('button', { type: 'button', title: t('Rechtsom draaien'), onclick: (e) => { e.stopPropagation(); this.draaiPaginas(90, [p.id]); } }, icoon('rechts', 14)),
+          el('button', { type: 'button', title: t('Verwijderen'), onclick: (e) => { e.stopPropagation(); this.verwijderPaginas([p.id]); } }, icoon('weg', 14)))));
       m.addEventListener('click', (e) => this.miniKlik(e, p.id));
       m.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.miniKlik(e, p.id); } });
       this.miniLijst.append(m);
@@ -1309,10 +1310,10 @@ export class Werkruimte {
     const doel = this.doelPaginas(ids);
     if (!doel.length) return;
     if (doel.length >= this.staat.paginas.length) {
-      melding('Je kunt niet alle pagina\'s verwijderen. Er moet er minstens één overblijven.', 'fout');
+      melding(t('Je kunt niet alle pagina\'s verwijderen. Er moet er minstens één overblijven.'), 'fout');
       return;
     }
-    if (doel.length > 1 && !(await bevestig('Pagina\'s verwijderen', `${doel.length} pagina's verwijderen? Dit kun je ongedaan maken.`, 'Verwijderen', true))) return;
+    if (doel.length > 1 && !(await bevestig(t('Pagina\'s verwijderen'), t('{n} pagina\'s verwijderen? Dit kun je ongedaan maken.', { n: doel.length }), t('Verwijderen'), true))) return;
     const weg = new Set(doel);
     this.staat.paginas = this.staat.paginas.filter((p) => !weg.has(p.id));
     for (const id of doel) { delete this.staat.aantekeningen[id]; this.paginaKeuze.delete(id); }
@@ -1443,9 +1444,9 @@ export class Werkruimte {
 
   voorgesteldeNaam() {
     const alle = Object.values(this.staat.aantekeningen).flat();
-    let achtervoegsel = 'bewerkt';
-    if (alle.some((a) => a.type === 'handtekening')) achtervoegsel = 'ondertekend';
-    else if (Object.keys(this.staat.formulier).length || alle.some((a) => ['tekst', 'datum', 'vinkje'].includes(a.type))) achtervoegsel = 'ingevuld';
+    let achtervoegsel = t('bewerkt');
+    if (alle.some((a) => a.type === 'handtekening')) achtervoegsel = t('ondertekend');
+    else if (Object.keys(this.staat.formulier).length || alle.some((a) => ['tekst', 'datum', 'vinkje'].includes(a.type))) achtervoegsel = t('ingevuld');
     return `${this.naam} (${achtervoegsel}).pdf`;
   }
 
@@ -1456,56 +1457,56 @@ export class Werkruimte {
     const naamVeld = el('input', { type: 'text', class: 'veld', value: this.voorgesteldeNaam() });
     const vast = el('input', { type: 'checkbox' });
     const stand = el('select', { class: 'veld' },
-      el('option', { value: '' }, 'Niet verkleinen'),
-      el('option', { value: 'email' }, 'Verkleinen voor e-mail'),
-      el('option', { value: 'scherm' }, 'Verkleinen voor scherm (kleinst)'),
-      el('option', { value: 'druk' }, 'Verkleinen voor drukwerk (300 dpi)'));
+      el('option', { value: '' }, t('Niet verkleinen')),
+      el('option', { value: 'email' }, t('Verkleinen voor e-mail')),
+      el('option', { value: 'scherm' }, t('Verkleinen voor scherm (kleinst)')),
+      el('option', { value: 'druk' }, t('Verkleinen voor drukwerk (300 dpi)')));
     const kanOverschrijven = !!(bron && bron.handle && bron.handle.createWritable);
     const inhoud = el('div', {},
-      el('label', { class: 'label' }, 'Bestandsnaam', naamVeld),
-      heeftVelden && bron ? el('label', { class: 'vinklabel' }, vast, 'Formulier vastzetten (invulvelden worden gewone tekst)') : null,
-      heeftVelden && !bron ? el('p', { class: 'klein' }, 'Omdat je meerdere documenten hebt samengevoegd, worden ingevulde formulieren vastgezet.') : null,
-      el('label', { class: 'label' }, 'Grootte', stand),
+      el('label', { class: 'label' }, t('Bestandsnaam'), naamVeld),
+      heeftVelden && bron ? el('label', { class: 'vinklabel' }, vast, t('Formulier vastzetten (invulvelden worden gewone tekst)')) : null,
+      heeftVelden && !bron ? el('p', { class: 'klein' }, t('Omdat je meerdere documenten hebt samengevoegd, worden ingevulde formulieren vastgezet.')) : null,
+      el('label', { class: 'label' }, t('Grootte'), stand),
       el('p', { class: 'klein' }, kanOverschrijven
-        ? 'Standaard bewaar je een nieuw bestand naast het origineel. Het origineel blijft dan onaangeroerd.'
-        : 'Je bewaart een nieuw bestand; het origineel blijft onaangeroerd.'));
+        ? t('Standaard bewaar je een nieuw bestand naast het origineel. Het origineel blijft dan onaangeroerd.')
+        : t('Je bewaart een nieuw bestand; het origineel blijft onaangeroerd.')));
     const naamWaarde = () => {
       let n = naamVeld.value.trim() || this.voorgesteldeNaam();
       if (!/\.pdf$/i.test(n)) n += '.pdf';
       return n;
     };
-    const knoppen = [{ label: 'Annuleren', waarde: null }];
-    if (kanOverschrijven) knoppen.push({ label: 'Origineel overschrijven', waarde: 'overschrijven' });
-    knoppen.push({ label: 'Opslaan als nieuw bestand', waarde: 'nieuw', primair: true });
-    const keuze = await dialoog({ titel: 'Opslaan', inhoud, knoppen });
+    const knoppen = [{ label: t('Annuleren'), waarde: null }];
+    if (kanOverschrijven) knoppen.push({ label: t('Origineel overschrijven'), waarde: 'overschrijven' });
+    knoppen.push({ label: t('Opslaan als nieuw bestand'), waarde: 'nieuw', primair: true });
+    const keuze = await dialoog({ titel: t('Opslaan'), inhoud, knoppen });
     if (!keuze) return;
-    if (keuze === 'overschrijven' && !(await bevestig('Origineel overschrijven?', `"${bron.naam}" wordt vervangen door de bewerkte versie. Dat kun je niet ongedaan maken.`, 'Overschrijven', true))) return;
+    if (keuze === 'overschrijven' && !(await bevestig(t('Origineel overschrijven?'), t('"{naam}" wordt vervangen door de bewerkte versie. Dat kun je niet ongedaan maken.', { naam: bron.naam }), t('Overschrijven'), true))) return;
 
-    const b = bezig('PDF maken…');
+    const b = bezig(t('PDF maken…'));
     try {
       let data = await this.bouw({ vastzetten: vast.checked });
       if (stand.value) {
-        b.tekst('Verkleinen…');
+        b.tekst(t('Verkleinen…'));
         const { blob, headers } = await api(`/api/verkleinen?stand=${stand.value}`, new Blob([data], { type: 'application/pdf' }), 'document.pdf');
         data = new Uint8Array(await blob.arrayBuffer());
         const voor = Number(headers.get('X-Grootte-Voor'));
-        melding(`Verkleind van ${grootte(voor)} naar ${grootte(data.length)}.`, 'goed');
+        melding(t('Verkleind van {voor} naar {na}.', { voor: grootte(voor), na: grootte(data.length) }), 'goed');
       }
       b.klaar();
       if (keuze === 'overschrijven') {
         await overschrijf(bron.handle, data);
-        melding(`"${bron.naam}" is overschreven.`, 'goed');
+        melding(t('"{naam}" is overschreven.', { naam: bron.naam }), 'goed');
       } else {
         const naam = await bewaar(data, naamWaarde(), { naast: bron && bron.handle });
         if (!naam) return;
-        melding(`Opgeslagen als "${naam}".`, 'goed');
+        melding(t('Opgeslagen als "{naam}".', { naam }), 'goed');
       }
       this.gewijzigd = false;
       this.bewaarConceptStraks();
     } catch (err) {
       b.klaar();
       console.error(err);
-      melding(err.message || 'Opslaan is mislukt.', 'fout', 8000);
+      melding(err.message || t('Opslaan is mislukt.'), 'fout', 8000);
     }
   }
 
@@ -1518,13 +1519,13 @@ export class Werkruimte {
     const doel = this.doelPaginas();
     if (!doel.length) return;
     const nummers = doel.map((id) => this.staat.paginas.findIndex((p) => p.id === id) + 1);
-    const label = nummers.length === 1 ? `pagina ${nummers[0]}` : `pagina's ${nummers.join(', ')}`;
-    const b = bezig('PDF maken…');
+    const label = nummers.length === 1 ? t('pagina {n}', { n: nummers[0] }) : t('pagina\'s {lijst}', { lijst: nummers.join(', ') });
+    const b = bezig(t('PDF maken…'));
     try {
       const data = await this.bouw({ vastzetten: true }, doel);
       b.klaar();
       const naam = await bewaar(data, `${this.naam} – ${label}.pdf`.slice(0, 180), { naast: this.enkeleBron() && this.enkeleBron().handle });
-      if (naam) melding(`${label[0].toUpperCase()}${label.slice(1)} opgeslagen als "${naam}".`, 'goed');
+      if (naam) melding(t('{wat} opgeslagen als "{naam}".', { wat: label[0].toUpperCase() + label.slice(1), naam }), 'goed');
     } catch (err) {
       b.klaar();
       melding(err.message, 'fout');
@@ -1532,14 +1533,14 @@ export class Werkruimte {
   }
 
   async alsWord() {
-    const b = bezig('PDF maken…');
+    const b = bezig(t('PDF maken…'));
     try {
       const data = await this.bouw({ vastzetten: true });
-      b.tekst('Omzetten naar Word… dit kan even duren');
+      b.tekst(t('Omzetten naar Word… dit kan even duren'));
       const { blob } = await api('/api/pdf-naar-word', new Blob([data], { type: 'application/pdf' }), `${this.naam}.pdf`);
       b.klaar();
       const naam = await bewaar(blob, `${this.naam}.docx`, { naast: this.enkeleBron() && this.enkeleBron().handle });
-      if (naam) melding(`Opgeslagen als "${naam}". Controleer de opmaak even in Word.`, 'goed', 7000);
+      if (naam) melding(t('Opgeslagen als "{naam}". Controleer de opmaak even in Word.', { naam }), 'goed', 7000);
     } catch (err) {
       b.klaar();
       melding(err.message, 'fout', 8000);
@@ -1550,26 +1551,26 @@ export class Werkruimte {
     const doel = this.doelPaginas();
     const alles = this.staat.paginas.map((p) => p.id);
     const bereik = el('select', { class: 'veld' },
-      el('option', { value: 'alles' }, `Alle pagina's (${alles.length})`),
-      doel.length && doel.length < alles.length ? el('option', { value: 'gekozen', selected: true }, `Gekozen pagina's (${doel.length})`) : null);
-    const soort = el('select', { class: 'veld' }, el('option', { value: 'png' }, 'PNG (scherp, groter)'), el('option', { value: 'jpg' }, 'JPG (kleiner)'));
-    const dpi = el('select', { class: 'veld' }, el('option', { value: '150' }, '150 dpi (scherm)'), el('option', { value: '300' }, '300 dpi (afdrukken)'));
+      el('option', { value: 'alles' }, t('Alle pagina\'s ({n})', { n: alles.length })),
+      doel.length && doel.length < alles.length ? el('option', { value: 'gekozen', selected: true }, t('Gekozen pagina\'s ({n})', { n: doel.length })) : null);
+    const soort = el('select', { class: 'veld' }, el('option', { value: 'png' }, t('PNG (scherp, groter)')), el('option', { value: 'jpg' }, t('JPG (kleiner)')));
+    const dpi = el('select', { class: 'veld' }, el('option', { value: '150' }, t('150 dpi (scherm)')), el('option', { value: '300' }, t('300 dpi (afdrukken)')));
     const ok = await dialoog({
-      titel: 'Pagina\'s als afbeelding',
-      inhoud: el('div', {}, el('label', { class: 'label' }, 'Welke pagina\'s', bereik), el('label', { class: 'label' }, 'Soort', soort), el('label', { class: 'label' }, 'Scherpte', dpi)),
-      knoppen: [{ label: 'Annuleren', waarde: null }, { label: 'Opslaan', waarde: true, primair: true }],
+      titel: t('Pagina\'s als afbeelding'),
+      inhoud: el('div', {}, el('label', { class: 'label' }, t('Welke pagina\'s'), bereik), el('label', { class: 'label' }, t('Soort'), soort), el('label', { class: 'label' }, t('Scherpte'), dpi)),
+      knoppen: [{ label: t('Annuleren'), waarde: null }, { label: t('Opslaan'), waarde: true, primair: true }],
     });
     if (!ok) return;
     const ids = bereik.value === 'gekozen' ? doel : alles;
-    const b = bezig('Afbeeldingen maken…');
+    const b = bezig(t('Afbeeldingen maken…'));
     try {
       const data = await this.bouw({ vastzetten: true }, ids);
-      const bestanden = await pdfNaarAfbeeldingen(data, soort.value, Number(dpi.value), this.naam, (i, n) => b.tekst(`Pagina ${i} van ${n}…`));
+      const bestanden = await pdfNaarAfbeeldingen(data, soort.value, Number(dpi.value), this.naam, (i, n) => b.tekst(t('Pagina {i} van {n}…', { i, n })));
       b.klaar();
       const uit = bestanden.length === 1
         ? await bewaar(bestanden[0].data, bestanden[0].naam)
-        : await bewaarMeerdere(bestanden, `${this.naam} – afbeeldingen.zip`);
-      if (uit) melding(`Opgeslagen: ${uit}.`, 'goed');
+        : await bewaarMeerdere(bestanden, `${this.naam} – ${t('afbeeldingen')}.zip`);
+      if (uit) melding(t('Opgeslagen: {uit}.', { uit }), 'goed');
     } catch (err) {
       b.klaar();
       melding(err.message, 'fout');
@@ -1577,18 +1578,18 @@ export class Werkruimte {
   }
 
   async doorzoekbaarMaken() {
-    const ok = await bevestig('Doorzoekbaar maken',
-      'Bladwerk herkent de tekst in gescande pagina\'s (Nederlands, Duits en Engels). Daarvoor gaat het document even naar je eigen server en wordt daar direct gewist. Je aantekeningen worden daarbij vast onderdeel van de pagina\'s.',
-      'Doorzoekbaar maken');
+    const ok = await bevestig(t('Doorzoekbaar maken'),
+      t('Bladwerk herkent de tekst in gescande pagina\'s (Nederlands, Duits en Engels). Daarvoor gaat het document even naar je eigen server en wordt daar direct gewist. Je aantekeningen worden daarbij vast onderdeel van de pagina\'s.'),
+      t('Doorzoekbaar maken'));
     if (!ok) return;
-    const b = bezig('PDF maken…');
+    const b = bezig(t('PDF maken…'));
     try {
       const data = await this.bouw({ vastzetten: true });
-      b.tekst('Tekst herkennen… dit kan bij veel pagina\'s een paar minuten duren');
+      b.tekst(t('Tekst herkennen… dit kan bij veel pagina\'s een paar minuten duren'));
       const { blob } = await api('/api/doorzoekbaar', new Blob([data], { type: 'application/pdf' }), `${this.naam}.pdf`);
       const bytes = new Uint8Array(await blob.arrayBuffer());
-      b.tekst('Openen…');
-      const bron = await this.voegBronToe(bytes, `${this.naam} (doorzoekbaar).pdf`, null);
+      b.tekst(t('Openen…'));
+      const bron = await this.voegBronToe(bytes, `${this.naam} (${t('doorzoekbaar')}).pdf`, null);
       this.staat = {
         paginas: bron.info.map((_, i) => ({ id: nieuwId('p'), bron: bron.id, index: i, draai: 0 })),
         aantekeningen: {},
@@ -1599,7 +1600,7 @@ export class Werkruimte {
       this.vastleggen();
       b.klaar();
       this.herteken();
-      melding('De tekst is herkend. Je kunt nu zoeken, kopiëren en de tekst corrigeren. Vergeet niet op te slaan.', 'goed', 8000);
+      melding(t('De tekst is herkend. Je kunt nu zoeken, kopiëren en de tekst corrigeren. Vergeet niet op te slaan.'), 'goed', 8000);
     } catch (err) {
       b.klaar();
       melding(err.message, 'fout', 8000);
@@ -1659,7 +1660,7 @@ export class Werkruimte {
 
   async sluiten() {
     this.stopBewerken();
-    if (this.gewijzigd && !(await bevestig('Document sluiten', 'Je hebt wijzigingen die nog niet zijn opgeslagen. Wil je het document toch sluiten? De wijzigingen gaan dan verloren.', 'Sluiten zonder opslaan', true))) return;
+    if (this.gewijzigd && !(await bevestig(t('Document sluiten'), t('Je hebt wijzigingen die nog niet zijn opgeslagen. Wil je het document toch sluiten? De wijzigingen gaan dan verloren.'), t('Sluiten zonder opslaan'), true))) return;
     this.opruimen();
     await concept.wisConcept();
     this.opSluiten();
@@ -1713,7 +1714,7 @@ export async function pdfNaarAfbeeldingen(bytes, soort, dpi, naam, voortgang) {
       await page.render({ canvasContext: ctx, viewport: vp }).promise;
       const blob = await new Promise((r) => c.toBlob(r, soort === 'jpg' ? 'image/jpeg' : 'image/png', 0.9));
       const nr = String(i).padStart(String(pdf.numPages).length, '0');
-      uit.push({ naam: `${naam} – pagina ${nr}.${soort}`, data: blob });
+      uit.push({ naam: `${naam} – ${t('pagina {n}', { n: nr })}.${soort}`, data: blob });
       c.width = 0; c.height = 0;
     }
   } finally {

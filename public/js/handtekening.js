@@ -2,6 +2,7 @@
  * Handtekening: één keer een foto of scan uploaden, de achtergrond wordt
  * doorzichtig gemaakt en het resultaat blijft alleen in deze browser.
  */
+import { t } from './i18n.js';
 import { el, dialoog, melding, knop, kiesBestanden, veilig } from './hulp.js';
 import { leesFoto } from './pdfbron.js';
 
@@ -21,7 +22,7 @@ function bewaarHandtekening(h) {
     localStorage.setItem(SLEUTEL, JSON.stringify(h));
     return true;
   } catch (_) {
-    melding('De handtekening kon niet in deze browser worden bewaard. Staat privé-surfen aan?', 'fout', 7000);
+    melding(t('De handtekening kon niet in deze browser worden bewaard. Staat privé-surfen aan?'), 'fout', 7000);
     return false;
   }
 }
@@ -106,8 +107,8 @@ export async function stelHandtekeningIn() {
   const voorbeeld = el('div', { class: 'handtekening-voorbeeld' });
   const toonVoorbeeld = () => {
     voorbeeld.innerHTML = '';
-    if (resultaat) voorbeeld.append(el('img', { src: resultaat.bron, alt: 'Voorbeeld van je handtekening' }));
-    else voorbeeld.append(el('p', { class: 'klein' }, beeld ? 'Geen handtekening gevonden. Zet de gevoeligheid hoger.' : 'Nog geen handtekening ingesteld.'));
+    if (resultaat) voorbeeld.append(el('img', { src: resultaat.bron, alt: t('Voorbeeld van je handtekening') }));
+    else voorbeeld.append(el('p', { class: 'klein' }, beeld ? t('Geen handtekening gevonden. Zet de gevoeligheid hoger.') : t('Nog geen handtekening ingesteld.')));
   };
   const herbereken = () => {
     if (!beeld) return;
@@ -118,15 +119,15 @@ export async function stelHandtekeningIn() {
   const schuif = el('input', { type: 'range', min: 0, max: 100, value: gevoeligheid, class: 'schuif' });
   schuif.addEventListener('input', () => { gevoeligheid = Number(schuif.value); herbereken(); });
   const inktKeuze = el('select', { class: 'veld' },
-    el('option', { value: 'origineel' }, 'Kleur zoals op de foto'),
-    el('option', { value: 'zwart' }, 'Zwart'),
-    el('option', { value: 'blauw' }, 'Donkerblauw'));
+    el('option', { value: 'origineel' }, t('Kleur zoals op de foto')),
+    el('option', { value: 'zwart' }, t('Zwart')),
+    el('option', { value: 'blauw' }, t('Donkerblauw')));
   inktKeuze.addEventListener('change', () => { inkt = inktKeuze.value; herbereken(); });
   const instellingen = el('div', { class: 'handtekening-instellingen', hidden: true },
-    el('label', { class: 'label' }, 'Gevoeligheid', schuif),
-    el('label', { class: 'label' }, 'Inktkleur', inktKeuze));
+    el('label', { class: 'label' }, t('Gevoeligheid'), schuif),
+    el('label', { class: 'label' }, t('Inktkleur'), inktKeuze));
 
-  const kies = knop('Foto of scan kiezen', {
+  const kies = knop(t('Foto of scan kiezen'), {
     icoon: 'foto',
     klik: async () => {
       const [k] = await kiesBestanden({ soort: 'foto' });
@@ -144,23 +145,23 @@ export async function stelHandtekeningIn() {
 
   toonVoorbeeld();
   const inhoud = el('div', {},
-    el('p', {}, 'Zet je handtekening met een donkere pen op wit papier en maak er een foto of scan van. Bladwerk maakt de achtergrond doorzichtig en bewaart hem alleen in deze browser op je eigen computer.'),
+    el('p', {}, t('Zet je handtekening met een donkere pen op wit papier en maak er een foto of scan van. Bladwerk maakt de achtergrond doorzichtig en bewaart hem alleen in deze browser op je eigen computer.')),
     kies,
     instellingen,
     voorbeeld);
 
-  const knoppen = [{ label: 'Annuleren', waarde: 'annuleren' }];
-  if (huidig) knoppen.unshift({ label: 'Verwijderen', waarde: 'wissen', gevaar: true });
-  knoppen.push({ label: 'Bewaren', waarde: 'bewaren', primair: true });
+  const knoppen = [{ label: t('Annuleren'), waarde: 'annuleren' }];
+  if (huidig) knoppen.unshift({ label: t('Verwijderen'), waarde: 'wissen', gevaar: true });
+  knoppen.push({ label: t('Bewaren'), waarde: 'bewaren', primair: true });
 
-  const keuze = await dialoog({ titel: 'Handtekening instellen', inhoud, knoppen });
+  const keuze = await dialoog({ titel: t('Handtekening instellen'), inhoud, knoppen });
   if (keuze === 'wissen') {
     wisHandtekening();
-    melding('Je handtekening is uit deze browser verwijderd.');
+    melding(t('Je handtekening is uit deze browser verwijderd.'));
     return null;
   }
   if (keuze === 'bewaren' && resultaat && resultaat !== huidig) {
-    if (bewaarHandtekening(resultaat)) melding('Je handtekening is bewaard.', 'goed');
+    if (bewaarHandtekening(resultaat)) melding(t('Je handtekening is bewaard.'), 'goed');
     return resultaat;
   }
   return keuze === 'bewaren' ? huidig : null;

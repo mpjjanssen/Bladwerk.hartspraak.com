@@ -21,7 +21,6 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 3000;
-const PASSWORD = process.env.BLADWERK_PASSWORD || '';
 const SECRET = process.env.SESSION_SECRET || '';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const SESSION_DAYS = 30;
@@ -29,10 +28,32 @@ const MAX_UPLOAD_MB = 300;
 const JOB_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_PARALLEL_JOBS = 2;
 
-if (!PASSWORD || !SECRET) {
-  console.error('BLADWERK_PASSWORD en SESSION_SECRET moeten ingesteld zijn.');
+/*
+ * Gebruikers: BLADWERK_GEBRUIKERS="Martien=wachtwoord1;Verena=wachtwoord2;…".
+ * Wie uit de lijst verdwijnt, of wiens wachtwoord verandert, is meteen
+ * uitgelogd. BLADWERK_PASSWORD geldt nog als wachtwoord van Martien.
+ */
+function leesGebruikers() {
+  const lijst = new Map();
+  for (const deel of String(process.env.BLADWERK_GEBRUIKERS || '').split(';')) {
+    const i = deel.indexOf('=');
+    if (i < 1) continue;
+    const naam = deel.slice(0, i).trim();
+    const wachtwoord = deel.slice(i + 1).trim();
+    if (naam && wachtwoord) lijst.set(naam, wachtwoord);
+  }
+  if (process.env.BLADWERK_PASSWORD && !lijst.has('Martien')) lijst.set('Martien', process.env.BLADWERK_PASSWORD);
+  return lijst;
+}
+const GEBRUIKERS = leesGebruikers();
+
+if (!GEBRUIKERS.size || !SECRET) {
+  console.error('BLADWERK_GEBRUIKERS (of BLADWERK_PASSWORD) en SESSION_SECRET moeten ingesteld zijn.');
   if (IS_PROD) process.exit(1);
 }
+
+/* Een korte vingerafdruk van het wachtwoord, zodat een nieuw wachtwoord oude sessies ongeldig maakt. */
+const vingerafdruk = (wachtwoord) => crypto.createHmac('sha256', SECRET).update(`pw:${wachtwoord}`).digest('base64url').slice(0, 12);
 
 const app = express();
 app.disable('x-powered-by');
@@ -48,28 +69,77 @@ app.use((req, res, next) => {
   next();
 });
 
+
+/* ---------- Foutmeldingen in de taal van de app (kop X-Taal) ---------- */
+const MELDINGEN = {
+  en: {
+    'Je bent niet (meer) ingelogd.': 'You are not logged in (any more).',
+    'Er is geen bestand meegestuurd.': 'No file was sent.',
+    'Het verwerken is mislukt. Probeer het nog eens, of met een ander bestand.': 'Processing failed. Try again, or with a different file.',
+    'Het bestand kon niet worden ontvangen.': 'The file could not be received.',
+    'Pages-bestanden kan ik niet omzetten. Exporteer het in Pages eerst als Word-bestand.': 'Pages files can\'t be converted. Export it from Pages as a Word file first.',
+    'Dit is geen PDF-bestand.': 'This is not a PDF file.',
+    'Deze PDF is beveiligd met een wachtwoord. Open hem eerst in de werkruimte om hem te ontgrendelen.': 'This PDF is password-protected. Open it in the workspace first to unlock it.',
+    'Deze PDF heeft al doorzoekbare tekst.': 'This PDF already has searchable text.',
+    'Dat wachtwoord klopt niet.': 'That password is incorrect.',
+    'Te veel pogingen. Wacht een kwartier en probeer het dan opnieuw.': 'Too many attempts. Wait fifteen minutes and try again.',
+    'Onbekende opdracht.': 'Unknown request.',
+    [`Het bestand is groter dan ${MAX_UPLOAD_MB} MB.`]: `The file is larger than ${MAX_UPLOAD_MB} MB.`,
+  },
+  de: {
+    'Je bent niet (meer) ingelogd.': 'Du bist nicht (mehr) angemeldet.',
+    'Er is geen bestand meegestuurd.': 'Es wurde keine Datei mitgeschickt.',
+    'Het verwerken is mislukt. Probeer het nog eens, of met een ander bestand.': 'Die Verarbeitung ist fehlgeschlagen. Versuche es noch einmal oder mit einer anderen Datei.',
+    'Het bestand kon niet worden ontvangen.': 'Die Datei konnte nicht empfangen werden.',
+    'Pages-bestanden kan ik niet omzetten. Exporteer het in Pages eerst als Word-bestand.': 'Pages-Dateien können nicht umgewandelt werden. Exportiere sie in Pages zuerst als Word-Datei.',
+    'Dit is geen PDF-bestand.': 'Das ist keine PDF-Datei.',
+    'Deze PDF is beveiligd met een wachtwoord. Open hem eerst in de werkruimte om hem te ontgrendelen.': 'Diese PDF ist mit einem Passwort geschützt. Öffne sie zuerst im Arbeitsbereich, um sie zu entsperren.',
+    'Deze PDF heeft al doorzoekbare tekst.': 'Diese PDF enthält bereits durchsuchbaren Text.',
+    'Dat wachtwoord klopt niet.': 'Das Passwort ist falsch.',
+    'Te veel pogingen. Wacht een kwartier en probeer het dan opnieuw.': 'Zu viele Versuche. Warte eine Viertelstunde und versuche es dann erneut.',
+    'Onbekende opdracht.': 'Unbekannte Anfrage.',
+    [`Het bestand is groter dan ${MAX_UPLOAD_MB} MB.`]: `Die Datei ist größer als ${MAX_UPLOAD_MB} MB.`,
+  },
+};
+app.use((req, res, next) => {
+  const taal = String(req.get('x-taal') || '').slice(0, 2);
+  if (!MELDINGEN[taal]) return next();
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    if (body && typeof body.fout === 'string' && MELDINGEN[taal][body.fout]) body = { ...body, fout: MELDINGEN[taal][body.fout] };
+    return json(body);
+  };
+  next();
+});
+
 /* ---------- Sessie ---------- */
 function sign(value) {
   return crypto.createHmac('sha256', SECRET).update(value).digest('base64url');
 }
 
-function makeSession() {
+function makeSession(naam) {
   const expires = Date.now() + SESSION_DAYS * 24 * 3600 * 1000;
   const nonce = crypto.randomBytes(8).toString('base64url');
-  const payload = `${expires}.${nonce}`;
+  const wie = Buffer.from(naam).toString('base64url');
+  const payload = `${expires}.${nonce}.${wie}.${vingerafdruk(GEBRUIKERS.get(naam))}`;
   return `${payload}.${sign(payload)}`;
 }
 
+/* Geeft de naam van de ingelogde gebruiker terug, of null. */
 function validSession(cookieValue) {
-  if (!cookieValue || !SECRET) return false;
+  if (!cookieValue || !SECRET) return null;
   const parts = cookieValue.split('.');
-  if (parts.length !== 3) return false;
-  const payload = `${parts[0]}.${parts[1]}`;
+  if (parts.length !== 5) return null;
+  const payload = parts.slice(0, 4).join('.');
   const expected = Buffer.from(sign(payload));
-  const given = Buffer.from(parts[2]);
-  if (expected.length !== given.length) return false;
-  if (!crypto.timingSafeEqual(expected, given)) return false;
-  return Number(parts[0]) > Date.now();
+  const given = Buffer.from(parts[4]);
+  if (expected.length !== given.length) return null;
+  if (!crypto.timingSafeEqual(expected, given)) return null;
+  if (Number(parts[0]) <= Date.now()) return null;
+  let naam;
+  try { naam = Buffer.from(parts[2], 'base64url').toString('utf8'); } catch (_) { return null; }
+  if (!GEBRUIKERS.has(naam) || vingerafdruk(GEBRUIKERS.get(naam)) !== parts[3]) return null;
+  return naam;
 }
 
 function readCookie(req, name) {
@@ -82,10 +152,15 @@ function readCookie(req, name) {
   return null;
 }
 
-function passwordMatches(given) {
+/* Zoekt bij welke gebruiker het wachtwoord hoort (in constante tijd per gebruiker). */
+function gebruikerBijWachtwoord(given) {
   const a = crypto.createHash('sha256').update(String(given || '')).digest();
-  const b = crypto.createHash('sha256').update(PASSWORD).digest();
-  return PASSWORD.length > 0 && crypto.timingSafeEqual(a, b);
+  let gevonden = null;
+  for (const [naam, wachtwoord] of GEBRUIKERS) {
+    const b = crypto.createHash('sha256').update(wachtwoord).digest();
+    if (crypto.timingSafeEqual(a, b) && !gevonden) gevonden = naam;
+  }
+  return gevonden;
 }
 
 /* Eenvoudige rem op raden: 8 pogingen per 15 minuten per adres. */
@@ -121,14 +196,15 @@ app.post('/inloggen', express.urlencoded({ extended: false, limit: '10kb' }), (r
       ? res.status(429).json({ fout: 'Te veel pogingen. Wacht een kwartier en probeer het dan opnieuw.' })
       : res.redirect('/?fout=wacht');
   }
-  if (!passwordMatches(req.body && req.body.wachtwoord)) {
+  const naam = gebruikerBijWachtwoord(req.body && req.body.wachtwoord);
+  if (!naam) {
     recordAttempt(ip);
     return wilJson(req) ? res.status(401).json({ fout: 'Dat wachtwoord klopt niet.' }) : res.redirect('/?fout=wachtwoord');
   }
   attempts.delete(ip);
   res.setHeader(
     'Set-Cookie',
-    `bw_sessie=${encodeURIComponent(makeSession())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${IS_PROD ? '; Secure' : ''}`
+    `bw_sessie=${encodeURIComponent(makeSession(naam))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${IS_PROD ? '; Secure' : ''}`
   );
   return wilJson(req) ? res.json({ ok: true }) : res.redirect('/');
 });
@@ -141,14 +217,15 @@ app.post('/uitloggen', (req, res) => {
 app.get('/gezond', (req, res) => res.type('text').send('ok'));
 
 app.use('/api/', (req, res, next) => {
-  if (validSession(readCookie(req, 'bw_sessie'))) return next();
+  const naam = validSession(readCookie(req, 'bw_sessie'));
+  if (naam) { req.gebruiker = naam; return next(); }
   res.setHeader('Cache-Control', 'no-store');
   return res.status(401).json({ fout: 'Je bent niet (meer) ingelogd.' });
 });
 
 app.get('/api/sessie', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ ingelogd: true });
+  res.json({ ingelogd: true, naam: req.gebruiker });
 });
 
 /* ---------- Statische bestanden ---------- */

@@ -4,7 +4,7 @@ V='/home/claude/bladwerk/test/voorbeelden/'; U='/home/claude/bladwerk/test/uitvo
 fouten=[]
 def log(*a): print(*a, flush=True)
 with sync_playwright() as p:
-    b=p.chromium.launch(); ctx=b.new_context(viewport={'width':1440,'height':900}, accept_downloads=True)
+    b=p.chromium.launch(); ctx=b.new_context(viewport={'width':1440,'height':900}, accept_downloads=True, locale='nl-NL')
     ctx.add_init_script("window.showOpenFilePicker=undefined;window.showSaveFilePicker=undefined;window.showDirectoryPicker=undefined;")
     pg=ctx.new_page()
     pg.on('console', lambda m: fouten.append(f'{m.type}: {m.text}') if m.type=='error' else None)

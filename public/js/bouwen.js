@@ -9,6 +9,7 @@
  * Dit bestand werkt zowel in de browser als in Node (voor de tests):
  * pdf-lib en fontkit worden van buitenaf aangereikt.
  */
+import { t } from './i18n.js';
 
 export const LETTERS = {
   helv: { std: 'Helvetica', bold: 'HelveticaBold', css: "'Arimo', Arial, Helvetica, sans-serif", basis: 0.947 },
@@ -79,7 +80,7 @@ class Letterkast {
       font.encodeText(tekst);
       return font;
     } catch (_) {
-      if (!this.laadUnicodeLetter) throw new Error('Tekst bevat tekens die niet ondersteund worden.');
+      if (!this.laadUnicodeLetter) throw new Error(t('Tekst bevat tekens die niet ondersteund worden.'));
       return this.unicode();
     }
   }
@@ -263,7 +264,7 @@ export async function bouwPdf(lib, staat, opties = {}) {
   const { PDFDocument, degrees } = lib;
   const laadOpties = { updateMetadata: false, ignoreEncryption: false };
   const gebruikteBronnen = [...new Set(staat.paginas.map((p) => p.bron))];
-  if (!staat.paginas.length) throw new Error('Er zijn geen pagina\'s om op te slaan.');
+  if (!staat.paginas.length) throw new Error(t('Er zijn geen pagina\'s om op te slaan.'));
 
   let doc;
   let pages; // PDFPage in de nieuwe volgorde
@@ -383,15 +384,15 @@ export function leesBereiken(tekst, aantal) {
     } else if (/^\d+$/.test(s)) {
       van = tot = parseInt(s, 10);
     } else {
-      throw new Error(`"${s}" begrijp ik niet. Gebruik bijvoorbeeld 1-3, 5, 8-10.`);
+      throw new Error(t('"{s}" begrijp ik niet. Gebruik bijvoorbeeld 1-3, 5, 8-10.', { s }));
     }
     if (van < 1 || tot > aantal || van > tot) {
-      throw new Error(`"${s}" valt buiten het document (1 t/m ${aantal}).`);
+      throw new Error(t('"{s}" valt buiten het document (1 t/m {n}).', { s, n: aantal }));
     }
     const g = [];
     for (let i = van; i <= tot; i++) g.push(i - 1);
     groepen.push(g);
   }
-  if (!groepen.length) throw new Error('Vul aan welke pagina\'s je wilt hebben.');
+  if (!groepen.length) throw new Error(t('Vul aan welke pagina\'s je wilt hebben.'));
   return groepen;
 }

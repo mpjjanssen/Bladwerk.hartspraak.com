@@ -11,7 +11,7 @@ localStorage.setItem('bladwerk.handtekening', JSON.stringify({bron: %s, breedte:
 fouten = []
 with sync_playwright() as p:
     b = p.chromium.launch()
-    ctx = b.new_context(viewport={'width':1440,'height':900}, accept_downloads=True)
+    ctx = b.new_context(viewport={'width':1440,'height':900}, accept_downloads=True, locale='nl-NL')
     ctx.add_init_script(init)
     pg = ctx.new_page()
     pg.on('console', lambda m: fouten.append(f'{m.type}: {m.text}') if m.type in ('error','warning') else None)
