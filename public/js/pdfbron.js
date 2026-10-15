@@ -1,5 +1,6 @@
 /* Laden van PDF's en foto's: bibliotheken, ontgrendelen, foto's omzetten. */
 import { t } from './i18n.js';
+import { LOKAAL } from './omgeving.js';
 import * as pdfjsLib from '/vendor/pdfjs/pdf.min.mjs';
 import * as PDFLib from '/vendor/pdf-lib/pdf-lib.esm.min.js';
 import { api, vraagWachtwoord, leesAlsBytes } from './hulp.js';
@@ -60,6 +61,9 @@ export async function maakBewerkbaar(bytes, naam) {
     if (!versleuteld) {
       throw new Error(t('"{naam}" kan ik niet lezen. Het bestand is mogelijk beschadigd.', { naam }));
     }
+    if (LOKAAL) {
+      throw new Error(t('"{naam}" is beveiligd met een wachtwoord. Open hem in Voorvertoning, kies Archief → Exporteer… en zet "Codeer" uit. Open daarna die nieuwe versie in Bladwerk.', { naam }));
+    }
     bytes = await ontgrendel(bytes, naam);
     if (!bytes) return null;
     doc = await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
@@ -99,7 +103,14 @@ export async function leesFoto(bestand) {
   let blob = bestand;
   const naam = (bestand.name || '').toLowerCase();
   if (/\.(heic|heif)$/.test(naam) || /image\/hei[cf]/.test(bestand.type)) {
-    ({ blob } = await api('/api/foto-naar-jpg', bestand, bestand.name));
+    if (LOKAAL) {
+      // De Mac zet iPhone-foto's zelf om (met het ingebouwde programma sips).
+      const jpg = await window.bladwerkLokaal.heicNaarJpg(new Uint8Array(await bestand.arrayBuffer()));
+      if (!jpg) throw new Error(t('"{naam}" is een iPhone-foto die niet kon worden omgezet. Open hem in Voorvertoning, kies Archief → Exporteer… met formaat JPEG, en gebruik die versie.', { naam: bestand.name }));
+      blob = new Blob([jpg], { type: 'image/jpeg' });
+    } else {
+      ({ blob } = await api('/api/foto-naar-jpg', bestand, bestand.name));
+    }
   }
   let beeld;
   try {

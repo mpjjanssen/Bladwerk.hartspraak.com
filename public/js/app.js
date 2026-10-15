@@ -1,11 +1,12 @@
 /* Startpagina, inloggen, installeren als app en het openen van de werkruimte. */
 import { t, locale, taal, zetTaal, TALEN } from './i18n.js';
-import { el, icoon, melding, kiesBestanden, bevestig, dialoog } from './hulp.js';
+import { el, icoon, melding, kiesBestanden, bevestig, dialoog, lokaalBestand } from './hulp.js';
 import { Werkruimte, bestandenUitSlepen } from './werkruimte.js';
 import * as concept from './concept.js';
 import * as klussen from './klussen.js';
 import { haalHandtekening } from './handtekening.js';
 import { zorgVoorSessie, toonInlog } from './inloggen.js';
+import { LOKAAL } from './omgeving.js';
 
 const start = document.getElementById('start');
 const werkEl = document.getElementById('werkruimte');
@@ -84,10 +85,25 @@ async function ontvangGeopendeBestanden(lijst) {
 }
 
 /* Moet meteen bij het laden worden gezet, anders mist de app het bestand. */
-const sessieKlaar = zorgVoorSessie().then((stand) => {
-  offline = stand === 'offline';
-  return stand;
-});
+const sessieKlaar = LOKAAL
+  ? Promise.resolve('lokaal').then((stand) => { window.bladwerkGebruiker = window.bladwerkLokaal.gebruiker || null; return stand; })
+  : zorgVoorSessie().then((stand) => {
+    offline = stand === 'offline';
+    return stand;
+  });
+/* Losse Mac-app: bestanden komen via "Open met" van de app zelf. */
+if (LOKAAL) {
+  window.bladwerkLokaal.opBestanden(async (ontvangen) => {
+    try {
+      const lijst = ontvangen.map(lokaalBestand);
+      await startKlaar;
+      await ontvangGeopendeBestanden(lijst);
+    } catch (err) {
+      console.error(err);
+      melding(t('Het bestand kon niet worden geopend.'), 'fout');
+    }
+  });
+}
 if ('launchQueue' in window) {
   window.launchQueue.setConsumer(async (params) => {
     if (!params.files || !params.files.length) return;
@@ -117,7 +133,22 @@ const KLUSSEN = [
   { id: 'ocr', titel: t('Doorzoekbaar maken'), uitleg: t('Tekst in scans herkennen'), icoon: 'zoeken', doe: klussen.doorzoekbaar },
   { id: 'verkleinen', titel: t('Verkleinen'), uitleg: t('Voor e-mail, scherm of drukwerk'), icoon: 'verkleinen', doe: klussen.verkleinen },
   { id: 'handtekening', titel: t('Handtekening instellen'), uitleg: '', icoon: 'handtekening', doe: async () => { await klussen.handtekeningInstellen(); toonStart(); } },
-];
+].filter((k) => !(LOKAAL && ['word-pdf', 'pdf-word', 'ocr', 'verkleinen'].includes(k.id)));
+if (LOKAAL) {
+  KLUSSEN.splice(KLUSSEN.length - 1, 0, { id: 'mactips', titel: t('Omzetten en verkleinen'), uitleg: t('Zo doet je Mac dat zelf'), icoon: 'word', doe: macTips });
+}
+
+function macTips() {
+  return dialoog({
+    titel: t('Omzetten en verkleinen op de Mac'),
+    breed: true,
+    inhoud: el('div', {},
+      el('p', {}, el('strong', {}, t('Word naar PDF')), el('br'), t('Open het document in Word of Pages en kies Bestand (of Archief) → Exporteer → PDF.')),
+      el('p', {}, el('strong', {}, t('PDF naar Word')), el('br'), t('Open de PDF in Microsoft Word; Word zet hem zelf om naar een bewerkbaar document.')),
+      el('p', {}, el('strong', {}, t('Verkleinen')), el('br'), t('Open de PDF in Voorvertoning, kies Archief → Exporteer… en kies bij Quartz-filter "Verklein bestandsgrootte".')),
+      el('p', {}, el('strong', {}, t('Tekst in scans')), el('br'), t('Voorvertoning herkent tekst in scans vanzelf: je kunt die tekst selecteren en kopiëren.'))),
+  });
+}
 
 function uitlegOpenMet() {
   return dialoog({
@@ -125,7 +156,9 @@ function uitlegOpenMet() {
     inhoud: el('div', {},
       el('p', {}, t('Klik in de Finder met de rechtermuisknop op een PDF en kies "Open met" → "Bladwerk". Het document opent dan direct in de werkruimte.')),
       el('p', {}, t('Voorvertoning blijft gewoon de standaard als je dubbelklikt.')),
-      el('p', { class: 'klein' }, t('Staat Bladwerk niet in het lijstje? Kies dan "Andere…" en zoek Bladwerk in de map Programma\'s, onder "Chrome-apps".'))),
+      el('p', { class: 'klein' }, LOKAAL
+        ? t('Staat Bladwerk niet in het lijstje? Kies dan "Andere…" en zoek Bladwerk in de map Programma\'s.')
+        : t('Staat Bladwerk niet in het lijstje? Kies dan "Andere…" en zoek Bladwerk in de map Programma\'s, onder "Chrome-apps".'))),
   });
 }
 
@@ -159,17 +192,17 @@ async function toonStart() {
   };
 
   const kopLinks = el('div', { class: 'kop-links' });
-  if (installPrompt && !isApp()) {
+  if (installPrompt && !isApp() && !LOKAAL) {
     kopLinks.append(el('button', { type: 'button', class: 'knop knop-klein', onclick: installeer }, icoon('toevoegen', 16), el('span', {}, t('Als app installeren'))));
   }
-  if (isApp()) {
+  if (isApp() || LOKAAL) {
     kopLinks.append(el('button', { type: 'button', class: 'linkknop', onclick: uitlegOpenMet }, t('PDF\'s openen met Bladwerk')));
   }
   const taalKeuze = el('select', { class: 'veld taalkeuze', 'aria-label': t('Taal'), title: t('Taal') },
     Object.entries(TALEN).map(([code, naam]) => el('option', { value: code, selected: code === taal() || null }, naam)));
   taalKeuze.addEventListener('change', () => zetTaal(taalKeuze.value));
   kopLinks.append(taalKeuze);
-  kopLinks.append(el('form', { method: 'post', action: '/uitloggen' }, el('button', { type: 'submit', class: 'linkknop' }, t('Uitloggen'))));
+  if (!LOKAAL) kopLinks.append(el('form', { method: 'post', action: '/uitloggen' }, el('button', { type: 'submit', class: 'linkknop' }, t('Uitloggen'))));
 
   start.append(
     el('header', { class: 'start-kop' },
@@ -181,8 +214,9 @@ async function toonStart() {
       sleepVak,
       el('h2', {}, t('Snelle klussen')),
       el('div', { class: 'klussen' }, KLUSSEN.map(kaart)),
-      el('p', { class: 'klein start-voet' },
-        t('Pagina\'s beheren, invullen, ondertekenen en aantekeningen gebeuren helemaal op je eigen computer. Alleen bij omzetten, verkleinen en tekst herkennen gaat een bestand even naar je eigen server, en daar wordt het direct gewist.'))));
+      el('p', { class: 'klein start-voet' }, LOKAAL
+        ? t('Alles gebeurt op je eigen computer. Er gaat niets naar internet.')
+        : t('Pagina\'s beheren, invullen, ondertekenen en aantekeningen gebeuren helemaal op je eigen computer. Alleen bij omzetten, verkleinen en tekst herkennen gaat een bestand even naar je eigen server, en daar wordt het direct gewist.'))));
 
   const c = await concept.laadConcept();
   if (c) {
@@ -191,7 +225,7 @@ async function toonStart() {
     verder.append(
       el('div', {},
         el('strong', {}, t('Verder waar je was')),
-        el('span', {}, `${c.naam} · ${t('{n} pagina\'s', { n: c.aantal || c.staat.paginas.length })} · ${tijd}${c.gewijzigd ? ` · ${t('niet opgeslagen wijzigingen')}` : ''}`)),
+        el('span', {}, `${c.naam} · ${(c.aantal || c.staat.paginas.length) === 1 ? t('1 pagina') : t('{n} pagina\'s', { n: c.aantal || c.staat.paginas.length })} · ${tijd}${c.gewijzigd ? ` · ${t('niet opgeslagen wijzigingen')}` : ''}`)),
       el('div', { class: 'rij' },
         el('button', { type: 'button', class: 'knop knop-primair', onclick: async () => {
           const w = nieuweWerkruimte();
@@ -238,7 +272,7 @@ window.addEventListener('appinstalled', () => {
   melding(t('Bladwerk is geïnstalleerd. Je vindt het in het Dock en in de map Programma\'s.'), 'goed', 8000);
 });
 
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !LOKAAL) {
   navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('Service worker niet geregistreerd', err));
 }
 
@@ -262,3 +296,4 @@ const startKlaar = sessieKlaar.then(async () => {
   // Was er al een bestand via "Open met" binnengekomen, dan komt de werkruimte direct.
   await toonStart();
 });
+if (LOKAAL) startKlaar.then(() => window.bladwerkLokaal.klaar());

@@ -3,3 +3,6 @@ node_modules
 .env
 test/uitvoer
 test/voorbeelden
+mac/node_modules
+mac/web
+mac/uit

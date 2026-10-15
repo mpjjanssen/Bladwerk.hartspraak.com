@@ -4,7 +4,7 @@
  * invullen en ondertekenen. Je documenten komen hier nooit in; alleen de
  * app zelf. Verwerking op de server (/api/) gaat altijd via internet.
  */
-const VERSIE = 'bladwerk-v3';
+const VERSIE = 'bladwerk-v4';
 const APP = [
   '/',
   '/css/app.css',
@@ -18,6 +18,7 @@ const APP = [
   '/js/werkruimte.js',
   '/js/inloggen.js',
   '/js/i18n.js',
+  '/js/omgeving.js',
   '/js/vertalingen.js',
   '/img/logo.svg',
   '/img/icoon-192.png',

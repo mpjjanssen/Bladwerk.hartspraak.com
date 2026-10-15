@@ -4,6 +4,7 @@
  * pas bij opslaan wordt er een nieuwe PDF gebouwd.
  */
 import { t, taal } from './i18n.js';
+import { LOKAAL } from './omgeving.js';
 import { pdfjsLib, PDFLib, openPdfjs, maakBewerkbaar, BOUW_OPTIES, fotosAlsPdf, isFoto } from './pdfbron.js';
 import { bouwPdf, LETTERS, REGELHOOGTE, schermMaat, laagVolgorde } from './bouwen.js';
 import {
@@ -163,8 +164,8 @@ export class Werkruimte {
       knop(t('Verwijderen'), { icoon: 'weg', klik: () => this.verwijderPaginas() }),
       knop(t('Uitnemen als nieuwe PDF'), { icoon: 'uitnemen', klik: () => this.uitnemen() }),
       el('h3', {}, t('Meer')),
-      knop(t('Doorzoekbaar maken'), { icoon: 'zoeken', klik: () => this.doorzoekbaarMaken(), titel: t('Tekst in gescande pagina\'s herkennen') }),
-      knop(t('Opslaan als Word'), { icoon: 'word', klik: () => this.alsWord() }),
+      LOKAAL ? null : knop(t('Doorzoekbaar maken'), { icoon: 'zoeken', klik: () => this.doorzoekbaarMaken(), titel: t('Tekst in gescande pagina\'s herkennen') }),
+      LOKAAL ? null : knop(t('Opslaan als Word'), { icoon: 'word', klik: () => this.alsWord() }),
       knop(t('Pagina\'s als afbeelding'), { icoon: 'afbeeldingen', klik: () => this.alsAfbeeldingen() }),
       el('p', { class: 'klein uitleg' }, t('Tip: kies pagina\'s links met ⌘-klik of ⇧-klik om er meerdere tegelijk te draaien, verwijderen of uit te nemen.')));
   }
@@ -993,7 +994,9 @@ export class Werkruimte {
     const p = this.pagina(pid);
     const item = await this.zoekItem(p, x, y);
     if (!item) {
-      melding(t('Hier vind ik geen tekst om te verbeteren. Bij een scan maak je eerst de pagina doorzoekbaar (rechts onder "Meer"), of gebruik je het gereedschap Tekst.'), 'info', 7000);
+      melding(LOKAAL
+        ? t('Hier vind ik geen tekst om te verbeteren. Gebruik bij een scan het gereedschap Tekst.')
+        : t('Hier vind ik geen tekst om te verbeteren. Bij een scan maak je eerst de pagina doorzoekbaar (rechts onder "Meer"), of gebruik je het gereedschap Tekst.'), 'info', 7000);
       return;
     }
     const vak = { x: item.links - 1, y: item.boven - 1, w: item.breedte + 2, h: item.onder - item.boven + 2 };
@@ -1461,12 +1464,12 @@ export class Werkruimte {
       el('option', { value: 'email' }, t('Verkleinen voor e-mail')),
       el('option', { value: 'scherm' }, t('Verkleinen voor scherm (kleinst)')),
       el('option', { value: 'druk' }, t('Verkleinen voor drukwerk (300 dpi)')));
-    const kanOverschrijven = !!(bron && bron.handle && bron.handle.createWritable);
+    const kanOverschrijven = !!(bron && bron.handle && (bron.handle.createWritable || bron.handle.lokaalPad));
     const inhoud = el('div', {},
       el('label', { class: 'label' }, t('Bestandsnaam'), naamVeld),
       heeftVelden && bron ? el('label', { class: 'vinklabel' }, vast, t('Formulier vastzetten (invulvelden worden gewone tekst)')) : null,
       heeftVelden && !bron ? el('p', { class: 'klein' }, t('Omdat je meerdere documenten hebt samengevoegd, worden ingevulde formulieren vastgezet.')) : null,
-      el('label', { class: 'label' }, t('Grootte'), stand),
+      LOKAAL ? null : el('label', { class: 'label' }, t('Grootte'), stand),
       el('p', { class: 'klein' }, kanOverschrijven
         ? t('Standaard bewaar je een nieuw bestand naast het origineel. Het origineel blijft dan onaangeroerd.')
         : t('Je bewaart een nieuw bestand; het origineel blijft onaangeroerd.')));
@@ -1682,6 +1685,13 @@ export class Werkruimte {
 /* Bestanden uit een sleepactie, met bestandshandvat waar de browser dat geeft. */
 export async function bestandenUitSlepen(dt) {
   const uit = [];
+  if (LOKAAL) {
+    for (const f of dt.files) {
+      const pad = window.bladwerkLokaal.pad(f);
+      uit.push({ bestand: f, handle: pad ? { lokaalPad: pad } : null });
+    }
+    return uit;
+  }
   const items = [...(dt.items || [])].filter((i) => i.kind === 'file');
   if (items.length && items[0].getAsFileSystemHandle) {
     const handles = await Promise.all(items.map((i) => i.getAsFileSystemHandle().catch(() => null)));

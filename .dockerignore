@@ -2,3 +2,4 @@ node_modules
 .git
 test
 *.log
+mac

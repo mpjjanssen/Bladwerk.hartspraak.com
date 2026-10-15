@@ -1,0 +1,75 @@
+{
+  "name": "bladwerk",
+  "version": "1.0.0",
+  "description": "Bladwerk – PDF-hulpmiddel (losse Mac-app)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "web": "python3 bouw-web.py",
+    "mac": "python3 bouw-web.py && electron-builder --mac zip --arm64 --x64"
+  },
+  "author": "Martinus Janssen",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@fontsource/arimo": "^5.3.0",
+    "@fontsource/cousine": "^5.3.0",
+    "@fontsource/lora": "^5.3.0",
+    "@fontsource/noto-sans": "^5.3.0",
+    "@fontsource/tinos": "^5.3.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "productName": "Bladwerk",
+  "private": true,
+  "build": {
+    "appId": "com.hartspraak.bladwerk",
+    "productName": "Bladwerk",
+    "copyright": "© Hartspraak",
+    "publish": null,
+    "directories": {
+      "output": "uit",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "web/**/*",
+      "package.json"
+    ],
+    "electronLanguages": [
+      "nl",
+      "en",
+      "de"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": null,
+      "extendInfo": {
+        "NSHumanReadableCopyright": "© Hartspraak",
+        "LSApplicationCategoryType": "public.app-category.productivity"
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "PDF",
+        "role": "Editor",
+        "rank": "Alternate",
+        "mimeType": "application/pdf"
+      }
+    ],
+    "linux": {
+      "target": "dir"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 /* Kleine hulpmiddelen voor de bediening: meldingen, vensters, opslaan, server. */
 import { t, locale, taal } from './i18n.js';
 import { toonInlog } from './inloggen.js';
+import { LOKAAL } from './omgeving.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -248,7 +249,17 @@ const SOORTEN = {
   },
 };
 
+/* Losse Mac-app: bestand + plaats op de Mac (voor opslaan ernaast en overschrijven). */
+const MIME = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', heif: 'image/heif', webp: 'image/webp', gif: 'image/gif', tif: 'image/tiff', tiff: 'image/tiff' };
+export function lokaalBestand(b) {
+  const ext = (b.naam.split('.').pop() || '').toLowerCase();
+  return { bestand: new File([b.bytes], b.naam, { type: MIME[ext] || '' }), handle: b.pad ? { lokaalPad: b.pad } : null };
+}
+const mapVan = (handle) => (handle && handle.lokaalPad ? handle.lokaalPad.replace(/\/[^/]*$/, '') : null);
+const naarBytes = async (data) => (data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : data instanceof Uint8Array ? data : new Uint8Array(data));
+
 export async function kiesBestanden({ meerdere = false, soort = 'pdf' } = {}) {
+  if (LOKAAL) return (await window.bladwerkLokaal.kies({ meerdere, soort })).map(lokaalBestand);
   const s = SOORTEN[soort];
   if (window.showOpenFilePicker) {
     try {
@@ -298,6 +309,7 @@ const TYPES = {
  * Geeft de gekozen naam terug, of null als je annuleert.
  */
 export async function bewaar(data, naam, { naast = null } = {}) {
+  if (LOKAAL) return window.bladwerkLokaal.bewaar({ naam, bytes: await naarBytes(data), map: mapVan(naast) });
   const blob = data instanceof Blob ? data : new Blob([data]);
   const ext = (naam.split('.').pop() || 'pdf').toLowerCase();
   if (window.showSaveFilePicker) {
@@ -327,6 +339,10 @@ export async function bewaar(data, naam, { naast = null } = {}) {
 
 /* Overschrijft een bestand dat je eerder hebt geopend (alleen Chrome). */
 export async function overschrijf(handle, data) {
+  if (LOKAAL && handle && handle.lokaalPad) {
+    await window.bladwerkLokaal.overschrijf({ pad: handle.lokaalPad, bytes: await naarBytes(data) });
+    return;
+  }
   if (!handle || !handle.createWritable) throw new Error(t('Overschrijven kan alleen in Chrome, met een bestand dat je via Bladwerk hebt geopend.'));
   if (handle.queryPermission && (await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') {
     const ok = await handle.requestPermission({ mode: 'readwrite' });
@@ -342,6 +358,12 @@ export async function overschrijf(handle, data) {
  * anders als één zip-bestand.
  */
 export async function bewaarMeerdere(bestanden, zipNaam, { naast = null } = {}) {
+  if (LOKAAL) {
+    const lijst = [];
+    for (const b of bestanden) lijst.push({ naam: b.naam, bytes: await naarBytes(b.data) });
+    const r = await window.bladwerkLokaal.bewaarMeerdere({ bestanden: lijst, map: mapVan(naast) });
+    return r ? t('{n} bestanden in map "{map}"', { n: r.n, map: r.map }) : null;
+  }
   if (window.showDirectoryPicker) {
     try {
       const opties = { mode: 'readwrite', id: 'bladwerk-map' };
